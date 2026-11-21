@@ -1,4 +1,4 @@
-﻿# Local-only folders
+# Local-only folders
 Compressed/
 Deprecated/
 ExtensionPresentation/
@@ -8,8 +8,9 @@ docs/
 # Zip files
 *.zip
 
-# Local dev / diagnostic tools
+# Local dev / diagnostic tools & user app state
 probe.py
+app_settings.json
 logs/
 devtools/
 

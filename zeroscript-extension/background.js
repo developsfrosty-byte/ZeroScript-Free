@@ -33,6 +33,7 @@ let lastMessageAt = 0; // timestamp of the last frame received from the bridge
 let nextId = 1;
 const pending = new Map(); // id -> {resolve, timer}
 let toolsCache = [];
+let skillsCache = [];
 let mcpAlive = false;
 let serversCache = [];
 // true/false = a PLACE is loaded and usable in Roblox Studio; null = unknown.
@@ -97,6 +98,7 @@ function connect() {
     studioApp = null;
     studioProc = null;
     serversCache = [];
+    skillsCache = [];
     stopHeartbeat();
     failAllPending("bridge connection closed");
     broadcastStatus();
@@ -226,6 +228,7 @@ function handleBridgeMessage(msg) {
     mcpAlive = !!msg.mcp_alive;
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
+    if (Array.isArray(msg.skills)) skillsCache = msg.skills;
     broadcastStatus();
     return;
   }
@@ -236,9 +239,16 @@ function handleBridgeMessage(msg) {
   if (msg.type === "tools") {
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
+    if (Array.isArray(msg.skills)) skillsCache = msg.skills;
     mcpAlive = !!msg.mcp_alive;
     resolvePending(msg.id, { ok: true, tools: toolsCache });
     broadcastStatus();
+    return;
+  }
+  if (msg.type === "skill_content") {
+    resolvePending(msg.id, msg.ok
+      ? { ok: true, skill: msg.skill }
+      : { ok: false, error: msg.error });
     return;
   }
   if (msg.type === "tool_result") {
@@ -251,6 +261,7 @@ function handleBridgeMessage(msg) {
     mcpAlive = !!msg.alive;
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
+    if (Array.isArray(msg.skills)) skillsCache = msg.skills;
     resolvePending(msg.id, { ok: !!msg.ok, alive: msg.alive, error: msg.error });
     broadcastStatus();
     return;
@@ -286,7 +297,7 @@ function failAllPending(reason) {
 
 // ── status push to any open DeepSeek tab + popup ─────────────────────────
 function statusObj() {
-  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, tools: toolsCache.length, servers: serversCache };
+  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, tools: toolsCache.length, servers: serversCache, skills: skillsCache };
 }
 
 function broadcastStatus() {
@@ -339,6 +350,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       case "remove_server": {
         const r = await send({ type: "remove_server", server_id: msg.server_id }, 15000);
+        sendResponse(r);
+        break;
+      }
+      case "read_skill": {
+        const r = await send({ type: "read_skill", skill_id: msg.skill_id }, 10000);
         sendResponse(r);
         break;
       }

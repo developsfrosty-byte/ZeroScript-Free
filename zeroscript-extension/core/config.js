@@ -22,7 +22,7 @@ const ZS = (() => {
   //   read | edit | screen | generate | roblox | tool
   function toolCategory(name) {
     const n = (name || "").includes("/") ? name.split("/").pop() : (name || "");
-    if (n === "list_commands" || n === "list_tools") return "read";
+    if (n === "list_commands" || n === "list_tools" || n === "list_skills" || n === "read_skill" || n === "get_skill") return "read";
     if (/^(script_read|script_search|script_grep|search_game_tree|inspect_instance|get_studio_state|get_console_output|search_creator_store|list_roblox_studios)$/.test(n))
       return "read";
     if (/^(multi_edit|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau")
@@ -167,7 +167,7 @@ const ZS = (() => {
   // every other provider is untouched by definition.
   function buildSystemPrompt(opts = {}) {
     if (typeof opts === "string") opts = { siteName: opts };
-    const { siteName = "this AI site", customPrompt = "", providerNotes = "" } = opts;
+    const { siteName = "this AI site", customPrompt = "", providerNotes = "", skills = [] } = opts;
 
     const prompt = `CONTEXT: the user has installed a browser extension called ZeroScript in their own browser. Here is how it works, so you can use it on their behalf:
 A browser extension (ZeroScript) is running inside this page. It watches your replies. When it detects a ZeroScript command in your text, it runs it against one or more connected MCP servers and sends the result back as the next message. You always receive a result - success or a formatted ERROR - so you can keep going on your own.
@@ -242,6 +242,27 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       ? `\n\n━━━ ADDITIONAL RULES FOR THIS SITE ━━━\n${providerNotes.trim()}`
       : "";
 
+    // Enabled skills from the ZeroScript bridge/app. Auto skills stay compact
+    // here and are loaded on-demand via `read_skill`; "always" skills embed
+    // directly into the prompt.
+    const enabledSkills = (skills || []).filter((s) => s && s.enabled !== false);
+    let skillsSection = "";
+    if (enabledSkills.length) {
+      const autoSkills = enabledSkills.filter((s) => s.mode !== "always");
+      const alwaysSkills = enabledSkills.filter((s) => s.mode === "always" && s.content);
+      const parts = ["\n\n━━━ AGENT SKILLS (PRO PLAYBOOKS) ━━━"];
+      if (autoSkills.length) {
+        parts.push(
+          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves UI/HUD design, 3D building/architecture, cutscenes/cinematics, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
+          autoSkills.map((s) => `- ${s.id} (${s.name}): ${s.tagline || s.category || "Pro playbook"}`).join("\n")
+        );
+      }
+      for (const s of alwaysSkills) {
+        parts.push(`[ALWAYS-ON SKILL: ${s.name} (${s.id})]\n${String(s.content).trim()}`);
+      }
+      skillsSection = parts.join("\n\n");
+    }
+
     // The user's own extra instructions, appended as a layer UNDER the system
     // prompt. Optional - empty by default. It cannot change the rules above.
     const extra = customPrompt.trim()
@@ -249,7 +270,7 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       : "";
 
     // The marker leads the prompt; it tags the bootstrap turn for camouflage.
-    return `${SYS_MARKER}\n${prompt}${siteRules}${extra}`;
+    return `${SYS_MARKER}\n${prompt}${siteRules}${skillsSection}${extra}`;
   }
 
   // ── Curated, TESTED usage notes per command ─────────────────────────────────

@@ -46,11 +46,27 @@
   // or changed length, tracked per node so a re-render starts clean.
   const seen = new WeakMap();
 
-  // The view can hang off the content node directly, or off its own dom's tile.
+  // The view can hang off the content node's cmTile or cmView expando, or off
+  // the enclosing .cm-editor depending on the CodeMirror 6 build.
   function viewOf(content) {
-    const t = content && content.cmTile;
-    if (!t) return null;
-    return t.view || (t.dom && t.dom.cmTile && t.dom.cmTile.view) || null;
+    if (!content) return null;
+    const t = content.cmTile;
+    if (t) {
+      const v = t.view || (t.root && t.root.view) || (t.dom && t.dom.cmTile && t.dom.cmTile.view);
+      if (v) return v;
+    }
+    const cv = content.cmView;
+    if (cv) {
+      const v = cv.view || (cv.rootView && cv.rootView.view);
+      if (v) return v;
+    }
+    const ed = content.closest && content.closest(".cm-editor");
+    if (ed) {
+      const v = (ed.cmView && (ed.cmView.view || (ed.cmView.rootView && ed.cmView.rootView.view))) ||
+        (ed.cmTile && (ed.cmTile.view || (ed.cmTile.root && ed.cmTile.root.view)));
+      if (v) return v;
+    }
+    return null;
   }
 
   function docOf(content) {
@@ -65,13 +81,14 @@
     const doc = docOf(content);
     if (!doc) return false;
     const len = doc.length;
-    if (seen.get(content) === len && content.hasAttribute(ATTR)) return true;
+    const prev = seen.get(content);
+    if (prev && prev.doc === doc && prev.len === len && content.hasAttribute(ATTR)) return true;
     let text;
     try { text = doc.toString(); } catch { return false; }
     try {
       content.setAttribute(ATTR, text);
       content.setAttribute(LEN, String(len));
-      seen.set(content, len);
+      seen.set(content, { doc, len });
     } catch { return false; }
     return true;
   }

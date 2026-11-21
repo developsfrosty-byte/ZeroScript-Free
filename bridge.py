@@ -19,6 +19,7 @@
 #     Nothing ever hangs the agentic loop silently.
 # ──────────────────────────────────────────────────────────────────────────
 import asyncio
+import collections
 import json
 import os
 import queue
@@ -26,6 +27,8 @@ import subprocess
 import sys
 import threading
 import time
+
+import skills_manager
 
 try:
     # Sibling script (same folder as bridge.py, which Python puts on sys.path
@@ -74,10 +77,17 @@ def _enable_ansi_colors():
 HOST = "127.0.0.1"
 # Keep in sync with zeroscript-extension/manifest.json "version" - printed at
 # startup so a user's terminal output alone tells us which build they're on.
-BRIDGE_VERSION = "1.5.5"
+BRIDGE_VERSION = "1.6.0"
 PORT = int(os.environ.get("ZS_BRIDGE_PORT", "17613"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.json")
+
+# True when hosted inside app.py (desktop tray/UI app): suppresses blocking stdin
+# prompts and hot-reloads MCP servers in-process instead of calling os.execv.
+EMBEDDED_MODE = False
+START_TIME = time.time()
+LOG_BUFFER = collections.deque(maxlen=400)
+LOG_LOCK = threading.Lock()
 
 # The primary server. It is always present, added by the installer, and can
 # never be edited/removed through the extension (it is what ZeroScript is FOR).
@@ -134,7 +144,7 @@ class _Spinner:
         self._owns_lock = False
 
     def __enter__(self):
-        if sys.stdout.isatty() and _Spinner._active.acquire(blocking=False):
+        if sys.stdout is not None and sys.stdout.isatty() and _Spinner._active.acquire(blocking=False):
             self._owns_lock = True
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
@@ -146,7 +156,8 @@ class _Spinner:
             self._thread.join(timeout=1.0)
             # Wipe the spinner line so the next log() line doesn't get glued
             # onto trailing spinner characters.
-            print("\r" + " " * (len(self.label) + 4) + "\r", end="", flush=True)
+            if sys.stdout is not None:
+                print("\r" + " " * (len(self.label) + 4) + "\r", end="", flush=True)
         if self._owns_lock:
             _Spinner._active.release()
 
@@ -154,7 +165,8 @@ class _Spinner:
         i = 0
         while not self._stop.is_set():
             frame = self.FRAMES[i % len(self.FRAMES)]
-            print(f"\r{C['dim']}{self.label} {frame}{C['reset']}", end="", flush=True)
+            if sys.stdout is not None:
+                print(f"\r{C['dim']}{self.label} {frame}{C['reset']}", end="", flush=True)
             i += 1
             self._stop.wait(0.15)
 
@@ -167,7 +179,7 @@ def _clear_spinner_line():
     the red box rendered smashed onto it instead of starting on a fresh line.
     \\033[K (clear to end of line) doesn't depend on knowing the spinner's label
     length the way Spinner.__exit__'s own wipe does."""
-    if sys.stdout.isatty():
+    if sys.stdout is not None and sys.stdout.isatty():
         print("\r\033[K", end="", flush=True)
 
 
@@ -176,9 +188,11 @@ def log(msg, color="dim", terminal=True):
     for noisy/technical detail (raw stderr from child MCP servers, per-call
     traces) that would bury the handful of lines a non-technical user actually
     needs to read. Nothing is ever lost - it all still lands in the file."""
-    if terminal:
+    ts = time.strftime("%H:%M:%S")
+    with LOG_LOCK:
+        LOG_BUFFER.append({"ts": ts, "msg": str(msg), "color": color})
+    if terminal and sys.stdout is not None:
         _clear_spinner_line()
-        ts = time.strftime("%H:%M:%S")
         print(f"{C['dim']}{ts}{C['reset']} {C.get(color,'')}{msg}{C['reset']}", flush=True)
     if _log_file:
         try:
@@ -199,16 +213,20 @@ def action_banner(lines):
     yellow block renders as one clean rectangle - an earlier version padded
     each line to a fixed guess independently, which produced a ragged block
     with mismatched edges on a real console (seen live 2026-07-13)."""
-    header = "ACTION NEEDED"
-    width = max([len(header) + 8] + [len(ln) for ln in lines]) + 2
-    top = f">>> {header} " + ">" * max(0, width - len(header) - 5)
-    _clear_spinner_line()
-    print()
-    print(f"{C['act']}  {top.ljust(width)}{C['reset']}")
-    for ln in lines:
-        print(f"{C['act']}  {ln.ljust(width)}{C['reset']}")
-    print(f"{C['act']}  {'>' * width}{C['reset']}")
-    print()
+    ts = time.strftime("%H:%M:%S")
+    with LOG_LOCK:
+        LOG_BUFFER.append({"ts": ts, "msg": "ACTION NEEDED: " + " | ".join(lines), "color": "yl"})
+    if sys.stdout is not None:
+        header = "ACTION NEEDED"
+        width = max([len(header) + 8] + [len(ln) for ln in lines]) + 2
+        top = f">>> {header} " + ">" * max(0, width - len(header) - 5)
+        _clear_spinner_line()
+        print()
+        print(f"{C['act']}  {top.ljust(width)}{C['reset']}")
+        for ln in lines:
+            print(f"{C['act']}  {ln.ljust(width)}{C['reset']}")
+        print(f"{C['act']}  {'>' * width}{C['reset']}")
+        print()
     if _log_file:
         try:
             _log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} ACTION NEEDED: "
@@ -598,10 +616,13 @@ def check_studio_port():
     log(f"port {STUDIO_MCP_PORT} (Studio's MCP port) is held by a non-Roblox process:", "yl")
     log(f"    {name} (pid {pid})  {where}", "yl")
     log("    This will block Studio's tools (the bridge will see 0 tools).", "yl")
-    try:
-        ans = input("    Kill this process so Studio can use the port? [y/N] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
+    if EMBEDDED_MODE or sys.stdin is None or not sys.stdin.isatty():
         ans = ""
+    else:
+        try:
+            ans = input("    Kill this process so Studio can use the port? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            ans = ""
     if ans in ("y", "yes", "o", "oui"):
         try:
             subprocess.run(["taskkill", "/F", "/PID", str(pid)],
@@ -700,6 +721,44 @@ def config_remove_server(server_id):
     except Exception as e:
         return False, f"could not write config.json: {e}"
     return True, None
+
+
+def reload_servers():
+    """Hot-reload MCP servers from config.json inside the current process."""
+    servers = _read_config().get("mcpServers", {}) or {}
+    # Stop removed servers
+    for sid in list(mgr.clients):
+        if sid not in servers:
+            log(f"[{sid}] removing server...", "yl")
+            try:
+                mgr.clients[sid].stop()
+            except Exception:
+                pass
+            del mgr.clients[sid]
+    # Add or replace changed servers
+    to_start = []
+    for sid, spec in servers.items():
+        cmd = spec.get("command")
+        args = list(spec.get("args") or [])
+        env = spec.get("env") or {}
+        existing = mgr.clients.get(sid)
+        if existing and existing.command == cmd and existing.args == args and existing.env == env:
+            continue
+        if existing:
+            try:
+                existing.stop()
+            except Exception:
+                pass
+        client = MCPClient(sid, cmd, args, env)
+        mgr.clients[sid] = client
+        to_start.append(client)
+    for client in to_start:
+        try:
+            client.start()
+        except Exception as e:
+            log(f"[{client.id}] failed to start after reload: {e}", "rd")
+    mgr.rebuild_index()
+    return {"servers": mgr.health(), "tools": mgr.list_tools()}
 
 
 def restart_self():
@@ -1327,6 +1386,7 @@ async def broadcast_status():
             "studio_proc": _proc,
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
+            "skills": skills_manager.list_summary(),
             "port": PORT,
         })
     except Exception:
@@ -1351,6 +1411,7 @@ async def handler(ws):
             "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
+            "skills": skills_manager.list_summary(),
             "port": PORT,
         }))
         async for raw in ws:
@@ -1386,6 +1447,32 @@ async def handler(ws):
                     "studio": _st["place"], "studio_app": _st["app"],
                     "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
                     "servers": mgr.health(),
+                    "skills": skills_manager.list_summary(),
+                }))
+
+            elif mtype == "list_skills":
+                full = bool(msg.get("full"))
+                await ws.send(json.dumps({
+                    "type": "skills", "id": rid,
+                    "skills": skills_manager.list_skills(include_content=full),
+                }))
+
+            elif mtype == "read_skill":
+                sid = msg.get("skill_id") or msg.get("name") or ""
+                sk = await asyncio.to_thread(skills_manager.get_skill, sid)
+                await ws.send(json.dumps({
+                    "type": "skill_content", "id": rid,
+                    "ok": bool(sk),
+                    "skill": sk,
+                    "error": None if sk else f"skill '{sid}' not found",
+                }))
+
+            elif mtype == "get_logs":
+                with LOG_LOCK:
+                    logs_copy = list(LOG_BUFFER)
+                await ws.send(json.dumps({
+                    "type": "logs", "id": rid,
+                    "logs": logs_copy,
                 }))
 
             elif mtype == "call_tool":
@@ -1408,8 +1495,8 @@ async def handler(ws):
             elif mtype in ("add_server", "remove_server"):
                 # Adding/removing an addon MCP server rewrites config.json, which
                 # the bridge only reads at launch - so we ack, then restart the
-                # whole process to pick it up cleanly. The primary Roblox server
-                # is protected inside config_add/remove_server.
+                # whole process (or hot-reload in EMBEDDED_MODE). The primary
+                # Roblox server is protected inside config_add/remove_server.
                 if mtype == "add_server":
                     ok, err = await asyncio.to_thread(
                         config_add_server,
@@ -1420,14 +1507,18 @@ async def handler(ws):
                         config_remove_server, msg.get("server_id"))
                 await ws.send(json.dumps({
                     "type": "server_changed", "id": rid,
-                    "ok": ok, "error": err, "restarting": ok,
+                    "ok": ok, "error": err, "restarting": bool(ok and not EMBEDDED_MODE),
                 }))
                 if ok:
-                    # Give the ack a beat to flush over the socket, then restart.
-                    async def _do_restart():
-                        await asyncio.sleep(0.4)
-                        restart_self()
-                    asyncio.create_task(_do_restart())
+                    if EMBEDDED_MODE:
+                        await asyncio.to_thread(reload_servers)
+                        await broadcast_status()
+                    else:
+                        # Give the ack a beat to flush over the socket, then restart.
+                        async def _do_restart():
+                            await asyncio.sleep(0.4)
+                            restart_self()
+                        asyncio.create_task(_do_restart())
 
             elif mtype == "restart_mcp":
                 sid = msg.get("server")

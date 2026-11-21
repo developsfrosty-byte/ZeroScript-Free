@@ -2,6 +2,17 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.6.0] - 2026-11-21
+
+### Added
+- **ZeroScript Desktop App (`ZeroScript.vbs` / `start_app.bat` / `app.py`).** Replaces having to keep a `start.bat` console window open on Windows: launches the bridge silently inside a standalone dark-editorial desktop app window (`app_ui/`) with a PyQt6 system tray icon, live Bridge/Studio/MCP status telemetry, one-click AI provider launcher, MCP server manager, live bridge log drawer, and customizable workspace preferences. Closing the window leaves the bridge alive silently in the system tray.
+- **Overpowered AI Agent Skills System (`skills/`).** Ships three built-in AAA Roblox Studio playbooks — **UI & HUD Craftsmanship** (`ui-craftsmanship`), **3D Building & World Architecture** (`building-architecture`), and **Cutscenes & Camera Choreography** (`cutscenes-cinematics`) — plus custom skill authoring in the Environment tab. Skills support `auto` (on-demand via `read_skill` / `list_skills`) and `always` (embedded directly in the system prompt) modes and sync live to open AI chat tabs.
+
+### Fixed
+- **ChatGPT: fixed synthetic stop clicks halting the agent loop.** `installSendHooks()` now ignores untrusted events (`!e.isTrusted`), preventing `unwedgeStop()` and programmatic button clicks from triggering `onNativeStop()`.
+- **ChatGPT: improved generation warmup, stop/send detection, and message injection.** `genActive()` preserves `WARMUP_MS` when an enabled stop button freshly appears before the first token, `isStopBtn()`/`submitButton()` handle `aria-label` stop buttons and skip hidden matches, `typeEditorText()` restores editor focus across chunked yields, and `typeAndSend()` avoids redundant re-typing on retries while recovering if a wedged composer swallows text.
+- **ChatGPT: hardened composer bar mounting, CodeMirror tap, camouflage, and Projects persistence.** `barMount()` checks computed grid styles and safely falls back when a grid template has no full-width top row, `placeBar()` preserves provider inline grid styles on first mount, `chatgpt-cm.js` supports `cmTile`/`cmView`/`.cm-editor` expandos and doc-identity change tracking, `syncCM()` syncs direct `.cm-content` reads, `findToolBlockSpot()` hides `###LUA:Server###` ranges and large (>= 600 char) unfenced JSON blocks, `resetDecoration()` clears `.zs-cmd-mask-all`, and `conversationKey()` persists `/g/<id>/c/<conv-id>` chats.
+
 ## [1.5.5] - 2026-09-10
 
 ### Fixed

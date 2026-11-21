@@ -55,12 +55,12 @@ Open Studio and load a Place, then enable MCP (first time only):
 
 > Not sure where to find these options? The [video tutorial](https://youtu.be/kPKiZLZ9_Ps) shows exactly where to click.
 
-### 3. Run the Bridge
+### 3. Run ZeroScript (Desktop App & Bridge)
 
-- **Windows:** double-click `start.bat` inside the extracted folder.
+- **Windows (recommended, no terminal):** double-click `ZeroScript.vbs` (or `start_app.bat` on first run) to open the **ZeroScript Desktop App** and system tray icon — closing the window leaves the bridge running silently in the background. *(You can still use `start.bat` if you prefer the classic terminal view.)*
 - **macOS:** double-click `MacOS_Start.command` inside the extracted folder. The first time, macOS will show a security warning ("could not verify... free of malware") - this is normal for any script downloaded outside the App Store, click **Done**, then go to **System Settings > Privacy & Security**, scroll to the bottom, and click **Open Anyway**. You only need to do this once.
 
-A small window opens, that means the Bridge is running.
+Once the app or window says **Bridge online**, you're ready to connect.
 
 ### 4. Start a session
 
@@ -81,7 +81,14 @@ Go to https://chat.deepseek.com (recommended), https://chatgpt.com, https://gemi
 - Generate meshes, materials, and models
 - Browse and insert from the Creator Store
 - Control play-testing
+- **Apply specialized AAA Agent Skills** built-in playbooks for UI & HUD Craftsmanship, 3D Building & Architecture, and Cutscenes & Camera Choreography (plus custom skills via the desktop app)
 - **Remember your project across sessions** persistent project memory saved inside your place
+
+## New in 1.6.0
+
+- **ZeroScript Desktop App (`ZeroScript.vbs`).** Launch ZeroScript into a clean dark desktop dashboard + system tray icon instead of keeping a terminal window open, with live Studio/Bridge telemetry, AI provider quick-launch, MCP server management, and live logs.
+- **Overpowered AI Agent Skills (`skills/`).** Built-in UI, Building, and Cutscenes playbooks plus custom skill editor in the Environment tab, synced live to connected AI tabs via `read_skill` / `list_skills`.
+- **ChatGPT reliability fixes.** Prevented `unwedgeStop()` synthetic clicks from killing the agent loop, improved thinking/warmup detection, hardened composer bar mounting and CodeMirror reading, and added support for ChatGPT Projects/Custom GPT URLs.
 
 ## New in 1.5.5
 

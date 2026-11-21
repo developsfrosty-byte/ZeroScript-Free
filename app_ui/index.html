@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZeroScript Workspace</title>
+  <link rel="icon" type="image/png" href="/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <canvas id="bg-matrix" aria-hidden="true"></canvas>
+
+  <div class="app-shell">
+    <!-- ── Left Sidebar ───────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-left">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M5 18L11.5 5L14.8 11.6L19 9.5L13.2 19H5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <circle cx="17.5" cy="5.5" r="1.5" fill="currentColor" />
+            </svg>
+          </div>
+          <span class="brand-name">ZEROSCRIPT</span>
+        </div>
+        <span class="brand-ver" id="brand-ver">V1.6.0</span>
+      </div>
+
+      <nav class="side-nav" id="side-nav">
+        <button class="nav-item active" data-view="home">
+          <span class="nav-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg>
+          </span>
+          <span class="nav-text">
+            <span class="nav-title">Home</span>
+            <span class="nav-sub">OVERVIEW, AI, GUIDES</span>
+          </span>
+          <span class="nav-pill" aria-hidden="true"></span>
+        </button>
+
+        <button class="nav-item" data-view="environment">
+          <span class="nav-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><path d="M17 13v8M13 17h8"/></svg>
+          </span>
+          <span class="nav-text">
+            <span class="nav-title">Environment</span>
+            <span class="nav-sub">SKILLS &amp; PLAYBOOKS</span>
+          </span>
+          <span class="nav-pill" aria-hidden="true"></span>
+        </button>
+
+        <button class="nav-item" data-view="connections">
+          <span class="nav-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="17" r="3"/><path d="M9.5 9.5l5 5"/><path d="M14 7h3a2 2 0 0 1 2 2v3"/></svg>
+          </span>
+          <span class="nav-text">
+            <span class="nav-title">Connections</span>
+            <span class="nav-sub">APPS &amp; SERVERS</span>
+          </span>
+          <span class="nav-pill" aria-hidden="true"></span>
+        </button>
+
+        <button class="nav-item" data-view="settings">
+          <span class="nav-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .7.41 1.33 1.05 1.6.15.06.31.1.48.1H21a2 2 0 1 1 0 4h-.09c-.7 0-1.33.41-1.51 1Z"/></svg>
+          </span>
+          <span class="nav-text">
+            <span class="nav-title">Settings</span>
+            <span class="nav-sub">MAKE IT YOURS</span>
+          </span>
+          <span class="nav-pill" aria-hidden="true"></span>
+        </button>
+      </nav>
+
+      <div class="side-bottom">
+        <div class="social-row">
+          <button class="social-btn" data-url="https://github.com/sebattfg/ZeroScript-Free">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.23 1.84 1.23 1.07 1.84 2.81 1.31 3.49 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58A12 12 0 0 0 12 .5Z"/></svg>
+            GitHub
+          </button>
+          <button class="social-btn" data-url="https://discord.gg/D5G2HAzX8z">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.44.86-.6 1.25a18.27 18.27 0 0 0-5.5 0 12.64 12.64 0 0 0-.62-1.25.08.08 0 0 0-.08-.04A19.74 19.74 0 0 0 3.68 4.37a.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 6 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.22-2a.08.08 0 0 0-.04-.1 13.1 13.1 0 0 1-1.87-.9.08.08 0 0 1-.01-.12c.13-.1.25-.2.37-.3a.07.07 0 0 1 .08 0c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08 0c.12.1.24.2.37.3a.08.08 0 0 1 0 .12c-.6.35-1.22.65-1.88.9a.08.08 0 0 0-.04.1c.36.7.77 1.37 1.23 2a.08.08 0 0 0 .08.03 19.84 19.84 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42Zm7.98 0c-1.19 0-2.16-1.08-2.16-2.42 0-1.33.95-2.42 2.16-2.42 1.2 0 2.17 1.1 2.15 2.42 0 1.34-.94 2.42-2.15 2.42Z"/></svg>
+            Discord
+          </button>
+        </div>
+
+        <div class="profile-card">
+          <div class="profile-avatar" id="profile-avatar">Z</div>
+          <div class="profile-meta">
+            <div class="profile-name" id="profile-name">Builder</div>
+            <div class="profile-role">LOCAL BRIDGE</div>
+          </div>
+          <button class="icon-mini" id="btn-quit-side" title="Quit ZeroScript completely">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main Workspace ─────────────────────────────────────────────── -->
+    <main class="main-area">
+      <header class="top-header">
+        <div>
+          <div class="eyebrow" id="page-eyebrow">— HOME</div>
+          <h1 class="page-greeting" id="page-title">Good evening, Builder</h1>
+          <p class="page-sub" id="page-sub">Bridge online. Pick a chat, connect a tool, build.</p>
+        </div>
+
+        <div class="header-actions">
+          <div class="status-pill" id="header-pill">
+            <span class="pulse-dot"></span>
+            <span id="header-pill-txt">BRIDGE ONLINE</span>
+          </div>
+
+          <button class="hdr-btn badge-host" id="btn-open-logs" title="Open Live Bridge Logs">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span class="hdr-badge" id="logs-badge">0</span>
+          </button>
+
+          <button class="hdr-btn" id="btn-refresh-top" title="Refresh Bridge & Studio">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+
+          <button class="hdr-btn" id="btn-restart-top" title="Restart Roblox MCP Proxy">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ── View: Home ───────────────────────────────────────────────── -->
+      <section class="view active" id="view-home">
+        <div class="subtab-bar">
+          <span class="subtab-prefix">| Home</span>
+          <button class="subtab active" data-subtab="overview">Overview</button>
+          <button class="subtab" data-subtab="providers">Providers</button>
+          <button class="subtab" data-subtab="guides">Guides</button>
+        </div>
+
+        <!-- Subtab: Overview -->
+        <div class="subpanel active" id="sub-overview">
+          <div class="hero-card">
+            <div class="hero-left">
+              <div class="eyebrow">— THE ZEROSCRIPT WORKSPACE</div>
+              <h2 class="hero-headline">
+                Your tools.<br />
+                <span class="hero-underline">One conversation.</span>
+              </h2>
+              <p class="hero-desc">
+                Choose your AI, equip pro UI/Building/Cutscene skills, connect your MCP servers, and build directly in Roblox Studio.
+              </p>
+              <div class="hero-ctas">
+                <button class="btn-primary" id="cta-browse-providers">BROWSE PROVIDERS →</button>
+                <button class="btn-outline" id="cta-open-skills">OPEN SKILLS</button>
+              </div>
+            </div>
+
+            <div class="hero-right">
+              <div class="eyebrow-muted">YOUR CONNECTED WORKSPACE</div>
+              <div class="diagram-row">
+                <div class="diagram-node">
+                  <span class="diag-idx">01</span>
+                  <div class="diag-title">Your AI</div>
+                  <div class="diag-sub">Pick a provider</div>
+                </div>
+                <div class="diagram-dash"></div>
+                <div class="diagram-hub">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none">
+                    <path d="M5 18L11.5 5L14.8 11.6L19 9.5L13.2 19H5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                    <circle cx="17.5" cy="5.5" r="1.5" fill="currentColor" />
+                  </svg>
+                </div>
+                <div class="diagram-dash"></div>
+                <div class="diagram-node">
+                  <span class="diag-idx">02</span>
+                  <div class="diag-title">Your tools</div>
+                  <div class="diag-sub">Studio + MCPs</div>
+                </div>
+              </div>
+
+              <div class="diagram-status" id="diagram-status">
+                <span class="dot-sm"></span>
+                <span id="diagram-status-txt">Local bridge online · choose a chat to start</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4-col KPI grid -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">COMMANDS</span>
+                <span class="kpi-idx">01</span>
+              </div>
+              <div class="kpi-val" id="kpi-commands">0</div>
+              <div class="kpi-sub">Live from the bridge</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">ROBLOX STUDIO</span>
+                <span class="kpi-idx">02</span>
+              </div>
+              <div class="kpi-val" id="kpi-studio">Checking...</div>
+              <div class="kpi-sub" id="kpi-studio-sub">Probing Studio MCP connection</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">SERVERS</span>
+                <span class="kpi-idx">03</span>
+              </div>
+              <div class="kpi-val" id="kpi-servers">0</div>
+              <div class="kpi-sub" id="kpi-servers-sub">0 of 0 connected</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">BRIDGE</span>
+                <span class="kpi-idx">04</span>
+              </div>
+              <div class="kpi-val" id="kpi-bridge">Online</div>
+              <div class="kpi-sub" id="kpi-bridge-sub">127.0.0.1:17613</div>
+            </div>
+          </div>
+
+          <div class="action-strip">
+            <button class="btn-outline sm" id="btn-refresh-overview">REFRESH CONNECTIONS</button>
+          </div>
+
+          <div class="quick-grid">
+            <button class="quick-card" id="quick-skills">
+              <div class="quick-ic">✦</div>
+              <div class="quick-body">
+                <div class="quick-title">Overpowered skills</div>
+                <div class="quick-sub" id="quick-skills-sub">UI, Building &amp; Cutscenes playbooks</div>
+              </div>
+              <span class="quick-arrow">→</span>
+            </button>
+
+            <button class="quick-card" id="quick-providers">
+              <div class="quick-ic">◈</div>
+              <div class="quick-body">
+                <div class="quick-title">AI Providers</div>
+                <div class="quick-sub">Launch DeepSeek, ChatGPT, Gemini &amp; more</div>
+              </div>
+              <span class="quick-arrow">→</span>
+            </button>
+
+            <button class="quick-card" id="quick-connections">
+              <div class="quick-ic">☍</div>
+              <div class="quick-body">
+                <div class="quick-title">Connect your tools</div>
+                <div class="quick-sub">Manage MCP integrations &amp; commands</div>
+              </div>
+              <span class="quick-arrow">→</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Subtab: Providers -->
+        <div class="subpanel" id="sub-providers">
+          <div class="section-head">
+            <div>
+              <h2 class="sec-title">AI Chat Providers</h2>
+              <p class="sec-sub">Open any supported AI site in your browser — ZeroScript attaches automatically when the Chrome extension is loaded.</p>
+            </div>
+          </div>
+          <div class="providers-grid" id="providers-grid"></div>
+        </div>
+
+        <!-- Subtab: Guides -->
+        <div class="subpanel" id="sub-guides">
+          <div class="section-head">
+            <div>
+              <h2 class="sec-title">Setup &amp; Pro Workflow Guide</h2>
+              <p class="sec-sub">Everything runs silently in the background via this desktop app — no terminal window needed.</p>
+            </div>
+          </div>
+          <div class="guides-grid">
+            <div class="guide-card">
+              <div class="guide-num">01</div>
+              <h3>Load the Chrome Extension</h3>
+              <p>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick the <code>zeroscript-extension</code> folder.</p>
+              <button class="btn-outline sm" data-folder="extension">OPEN EXTENSION FOLDER</button>
+            </div>
+            <div class="guide-card">
+              <div class="guide-num">02</div>
+              <h3>Enable Roblox Studio MCP</h3>
+              <p>Open a place in Roblox Studio, open <b>Assistant Settings &gt; MCP Servers</b>, and toggle <b>Enable Studio as MCP server</b> on.</p>
+              <button class="btn-outline sm" id="guide-refresh">CHECK CONNECTION</button>
+            </div>
+            <div class="guide-card">
+              <div class="guide-num">03</div>
+              <h3>Equip Overpowered Skills</h3>
+              <p>Built-in <b>UI</b>, <b>Building</b>, and <b>Cutscenes</b> playbooks automatically teach any AI agent AAA Studio craft — customize or add your own in Environment.</p>
+              <button class="btn-outline sm" id="guide-open-env">OPEN SKILLS</button>
+            </div>
+            <div class="guide-card">
+              <div class="guide-num">04</div>
+              <h3>Pick an AI &amp; Start Building</h3>
+              <p>Open DeepSeek, ChatGPT, Gemini, or any supported provider, then click <b>▶ Start Roblox agent</b> in the composer bar.</p>
+              <button class="btn-primary sm" id="guide-browse-ai">BROWSE PROVIDERS →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── View: Environment (Skills & Files) ───────────────────────── -->
+      <section class="view" id="view-environment">
+        <div class="toolbar-row">
+          <div class="filter-pills" id="skill-filters">
+            <button class="filter-pill active" data-cat="All">All</button>
+            <button class="filter-pill" data-cat="UI">UI</button>
+            <button class="filter-pill" data-cat="Building">Building</button>
+            <button class="filter-pill" data-cat="Cutscenes">Cutscenes</button>
+            <button class="filter-pill" data-cat="Custom">Custom</button>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn-outline sm" data-folder="skills">OPEN SKILLS FOLDER</button>
+            <button class="btn-primary sm" id="btn-new-skill">+ NEW SKILL</button>
+          </div>
+        </div>
+
+        <div class="skills-grid" id="skills-grid"></div>
+      </section>
+
+      <!-- ── View: Connections (Apps & Servers) ───────────────────────── -->
+      <section class="view" id="view-connections">
+        <div class="conn-layout">
+          <div class="conn-left">
+            <div class="section-head tight">
+              <div>
+                <h2 class="sec-title">MCP Servers</h2>
+                <p class="sec-sub">Hot-managed stdio MCP processes hosted by ZeroScript.</p>
+              </div>
+              <button class="btn-outline sm" id="btn-restart-all">RESTART ALL</button>
+            </div>
+            <div class="servers-list" id="servers-list"></div>
+
+            <div class="add-server-card">
+              <h3 class="card-heading">Add MCP Server</h3>
+              <form id="add-server-form" class="form-stack">
+                <div class="form-row">
+                  <label>
+                    <span>Server ID</span>
+                    <input type="text" id="srv-id" placeholder="blender" required />
+                  </label>
+                  <label>
+                    <span>Command</span>
+                    <input type="text" id="srv-cmd" placeholder="uvx" required />
+                  </label>
+                </div>
+                <label>
+                  <span>Arguments (space separated)</span>
+                  <input type="text" id="srv-args" placeholder="blender-mcp" />
+                </label>
+                <label>
+                  <span>Environment JSON (optional)</span>
+                  <input type="text" id="srv-env" placeholder='{"API_KEY": "..."}' />
+                </label>
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary sm">ADD &amp; CONNECT</button>
+                  <span class="form-msg" id="add-server-msg"></span>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="conn-right">
+            <div class="section-head tight">
+              <div>
+                <h2 class="sec-title">Live Commands</h2>
+                <p class="sec-sub" id="tools-count-sub">0 commands loaded</p>
+              </div>
+              <input type="search" id="tool-search" class="search-input" placeholder="Search commands..." />
+            </div>
+            <div class="tools-list" id="tools-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── View: Settings ───────────────────────────────────────────── -->
+      <section class="view" id="view-settings">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h2 class="sec-title">Workspace Preferences</h2>
+            <p class="sec-sub">Personalize your ZeroScript desktop workspace and background behavior.</p>
+
+            <form id="settings-form" class="form-stack">
+              <label>
+                <span>Display Name</span>
+                <input type="text" id="set-username" maxlength="40" placeholder="Builder" />
+              </label>
+
+              <label class="toggle-row">
+                <div>
+                  <div class="toggle-title">Keep bridge running in System Tray</div>
+                  <div class="toggle-sub">Closing this window leaves the local bridge alive silently in the background.</div>
+                </div>
+                <input type="checkbox" id="set-tray" />
+              </label>
+
+              <label class="toggle-row">
+                <div>
+                  <div class="toggle-title">Open dashboard window on launch</div>
+                  <div class="toggle-sub">Show this window automatically when starting ZeroScript.</div>
+                </div>
+                <input type="checkbox" id="set-autoopen" />
+              </label>
+
+              <div class="form-actions">
+                <button type="submit" class="btn-primary sm">SAVE PREFERENCES</button>
+                <span class="form-msg" id="settings-msg"></span>
+              </div>
+            </form>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="sec-title">Workspace Folders &amp; Actions</h2>
+            <p class="sec-sub">Direct access to local files, logs, and extension directory.</p>
+
+            <div class="folder-actions">
+              <button class="quick-card" data-folder="extension">
+                <div class="quick-ic">◫</div>
+                <div class="quick-body">
+                  <div class="quick-title">Extension Folder</div>
+                  <div class="quick-sub" id="path-ext">zeroscript-extension</div>
+                </div>
+                <span class="quick-arrow">→</span>
+              </button>
+
+              <button class="quick-card" data-folder="skills">
+                <div class="quick-ic">✦</div>
+                <div class="quick-body">
+                  <div class="quick-title">Skills Folder</div>
+                  <div class="quick-sub" id="path-skills">skills</div>
+                </div>
+                <span class="quick-arrow">→</span>
+              </button>
+
+              <button class="quick-card" data-folder="logs">
+                <div class="quick-ic">≡</div>
+                <div class="quick-body">
+                  <div class="quick-title">Bridge Logs</div>
+                  <div class="quick-sub" id="path-logs">logs</div>
+                </div>
+                <span class="quick-arrow">→</span>
+              </button>
+
+              <button class="quick-card danger" id="btn-quit-settings">
+                <div class="quick-ic">⏻</div>
+                <div class="quick-body">
+                  <div class="quick-title">Quit ZeroScript</div>
+                  <div class="quick-sub">Stop local bridge, MCP servers &amp; system tray</div>
+                </div>
+                <span class="quick-arrow">→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ── Skill Editor Modal ─────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="skill-modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" id="skill-modal-eyebrow">— EDIT SKILL PLAYBOOK</div>
+          <h2 class="modal-title" id="skill-modal-title">Edit Skill</h2>
+        </div>
+        <button class="hdr-btn" id="skill-modal-close">✕</button>
+      </div>
+
+      <form id="skill-form" class="form-stack">
+        <div class="form-row">
+          <label>
+            <span>Skill Name</span>
+            <input type="text" id="sk-name" required placeholder="e.g. Combat VFX &amp; Polish" />
+          </label>
+          <label>
+            <span>Skill ID (slug)</span>
+            <input type="text" id="sk-id" placeholder="auto-generated" />
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label>
+            <span>Category</span>
+            <select id="sk-cat">
+              <option value="UI">UI</option>
+              <option value="Building">Building</option>
+              <option value="Cutscenes">Cutscenes</option>
+              <option value="Custom">Custom</option>
+            </select>
+          </label>
+          <label>
+            <span>Injection Mode</span>
+            <select id="sk-mode">
+              <option value="auto">Auto (loaded by agent via read_skill)</option>
+              <option value="always">Always (embedded in every system prompt)</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          <span>Short Tagline (shown to agent in system prompt)</span>
+          <input type="text" id="sk-tagline" placeholder="One-line summary of when and how to apply this playbook..." />
+        </label>
+
+        <label>
+          <span>Playbook Markdown Instructions</span>
+          <textarea id="sk-content" rows="15" required placeholder="# Playbook instructions..."></textarea>
+        </label>
+
+        <div class="form-actions between">
+          <span class="form-msg" id="skill-form-msg"></span>
+          <div class="hero-ctas">
+            <button type="button" class="btn-outline sm" id="skill-modal-cancel">CANCEL</button>
+            <button type="submit" class="btn-primary sm">SAVE SKILL</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Slide-over Live Logs Drawer ────────────────────────────────────── -->
+  <div class="drawer-backdrop" id="logs-drawer" hidden>
+    <div class="drawer-card">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">— LIVE TELEMETRY</div>
+          <h2 class="modal-title">Bridge Logs</h2>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn-outline sm" data-folder="logs">OPEN FOLDER</button>
+          <button class="btn-outline sm" id="btn-copy-logs">COPY</button>
+          <button class="hdr-btn" id="btn-close-logs">✕</button>
+        </div>
+      </div>
+      <div class="drawer-filter">
+        <input type="search" id="logs-filter" class="search-input full" placeholder="Filter log entries..." />
+      </div>
+      <div class="logs-stream" id="logs-stream"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+

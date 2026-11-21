@@ -150,7 +150,10 @@ const ZSProvider = (() => {
   const BLOCK_TAGS = /^(?:P|DIV|PRE|LI|UL|OL|BLOCKQUOTE|H[1-6]|TABLE|TR|SECTION|ARTICLE|HR)$/;
   let _cmWarned = false;
   function syncCM(root) {
-    if (!root || !root.querySelector || !root.querySelector(".cm-content")) return;
+    if (!root) return;
+    const isSelf = !!(root.classList && root.classList.contains("cm-content"));
+    const hasChild = !!(root.querySelector && root.querySelector(".cm-content"));
+    if (!isSelf && !hasChild) return;
     try { document.dispatchEvent(new CustomEvent("zs-cm-sync")); } catch {}
   }
   function textWithout(root, excludeSel) {
@@ -310,10 +313,30 @@ const ZSProvider = (() => {
     if (!ed) return null;
     const box = ed.closest("[class*='composer-surface']");
     if (!box) return null;
-    const area = topArea(box);
-    if (area) {
-      const bar = document.getElementById("zs-bar");
-      if (bar && bar.style.gridArea !== area) bar.style.gridArea = area;
+    const bar = document.getElementById("zs-bar");
+    let st = null;
+    try { st = getComputedStyle(box); } catch {}
+    if (st && /\bgrid\b/.test(st.display || "")) {
+      const area = topArea(box);
+      if (area) {
+        if (bar) {
+          if (bar.style.gridArea !== area) bar.style.gridArea = area;
+          if (bar.style.gridColumn !== "") bar.style.gridColumn = "";
+        }
+      } else if (!st.gridTemplateAreas || st.gridTemplateAreas === "none") {
+        if (bar) {
+          if (bar.style.gridArea !== "auto") bar.style.gridArea = "auto";
+          if (bar.style.gridColumn !== "1 / -1") bar.style.gridColumn = "1 / -1";
+        }
+      } else {
+        // Named grid template with no full-width top row: fall back to the
+        // floating bar rather than letting overlay.css's grid-area create
+        // implicit tracks that collapse the editor.
+        return null;
+      }
+    } else if (bar) {
+      if (bar.style.gridArea !== "auto") bar.style.gridArea = "auto";
+      if (bar.style.gridColumn !== "") bar.style.gridColumn = "";
     }
     // Skip our own bar if already mounted, otherwise we'd insert it before itself.
     let before = box.firstElementChild;
@@ -343,10 +366,19 @@ const ZSProvider = (() => {
   // sendButton() cheerfully returns the stop square and every guarded click is
   // refused. That is exactly what stranded a tool result in the composer and
   // raised "ChatGPT did not accept the injected message after 4 attempts".
-  const isStopBtn = (b) => !!b && b.getAttribute("data-testid") === "stop-button";
+  const isStopBtn = (b) => !!b && (
+    b.getAttribute("data-testid") === "stop-button" ||
+    /^(?:stop\b|interrompre\b)/i.test((b.getAttribute("aria-label") || "").trim())
+  );
   const submitButton = () => {
-    const b = document.querySelector(S.submitBtn);
-    return b && b.offsetParent !== null ? b : null;
+    for (const b of document.querySelectorAll(S.submitBtn)) {
+      if (b.offsetParent !== null) return b;
+      if (b.getBoundingClientRect) {
+        const r = b.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return b;
+      }
+    }
+    return null;
   };
   const sendButton = () => {
     const b = submitButton();
@@ -381,18 +413,31 @@ const ZSProvider = (() => {
   const grewWithin = (ms) => _streamMax > 1 && Date.now() - _streamAt < ms;
 
   const WEDGE_MS = 10000;
-  let _stopSince = 0;
+  let _stopSince = 0, _sawIdle = false, _stopFresh = false;
   function genActive() {
     sampleStream();
-    const stop = !!stopButton();
+    const stopEl = stopButton();
     const now = Date.now();
-    if (stop) {
-      if (!_stopSince) _stopSince = now;
+    if (stopEl) {
+      if (!_stopSince) { _stopSince = now; _stopFresh = _sawIdle; }
+      // Freshly appeared, enabled stop button waiting on the first reply token
+      // (warmup / reasoning phase): honor WARMUP_MS instead of treating it as wedged.
+      if (_stopFresh && !stopEl.disabled) {
+        const items = allItems();
+        const it = lastAssistant();
+        const awaitingFirst =
+          (items.length > 0 && isUserItem(items[items.length - 1])) ||
+          (it && (!it.querySelector(S.reply) || streamText(it).trim() === ""));
+        if (awaitingFirst && now - _stopSince < timings.WARMUP_MS) return true;
+      }
       // Trust the stop button while the stream advances, or just after it
       // appeared (generation spinning up). Frozen past WEDGE_MS ⇒ treat as done.
-      return (now - _streamAt < WEDGE_MS) || (now - _stopSince < 2000);
+      const grace = _stopFresh ? WEDGE_MS : 2000;
+      return (now - _streamAt < WEDGE_MS) || (now - _stopSince < grace);
     }
     _stopSince = 0;
+    _stopFresh = false;
+    _sawIdle = true;
     return grewWithin(timings.GEN_IDLE_MS);
   }
   const isGenerating = genActive;
@@ -448,8 +493,7 @@ const ZSProvider = (() => {
     try {
       const it = lastAssistant();
       if (!it) return { th: 0, rp: 0 };
-      const md = it.querySelector(S.reply);
-      return { th: 0, rp: md ? (md.textContent || "").length : 0 };
+      return { th: 0, rp: itemText(it).length };
     } catch { return {}; }
   }
 
@@ -581,7 +625,18 @@ const ZSProvider = (() => {
       if (lines[i]) document.execCommand("insertText", false, lines[i]);
       // insertLineBreak, never a synthetic Enter: Enter is what SENDS on ChatGPT.
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
-      if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
+      if (i && i % INSERT_CHUNK_LINES === 0) {
+        await sleep(0);
+        if (document.activeElement !== ed) {
+          ed.focus();
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(ed);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
     }
     if (lines.length > INSERT_CHUNK_LINES) diag("send.insertDone", { lines: lines.length, ms: Date.now() - t0 });
   }
@@ -598,8 +653,9 @@ const ZSProvider = (() => {
     text = truncateForSend(text);
     const relock = _locked;
     if (relock) ed.setAttribute("contenteditable", "true"); // injection needs it editable
+    const hasText = () => editorText().replace(/\s+/g, "") === text.replace(/\s+/g, "");
     try {
-      await setEditorText(ed, text);
+      if (!hasText()) await setEditorText(ed, text);
       // Attach images LAST, right before the send click - see gemini.js/deepseek.js
       // typeAndSend for why (attaching first and then retyping the text can sever
       // the site's binding between the pending upload and the message sent).
@@ -622,6 +678,11 @@ const ZSProvider = (() => {
       // case unwedge refuses and we fall through), or the control is stuck in its
       // stop role with nothing generating - the case that stranded the result.
       if (!sendButton()) await unwedgeStopPersistently();
+      if (!sendButton() && !hasText()) {
+        diag("send.retype", {});
+        await setEditorText(ed, text);
+        await waitFor(() => !!sendButton(), 2000);
+      }
       const btn = sendButton();
       // Disabled send = a quota wall, not a wedge. Clicking it does nothing and
       // Enter is refused too, so return now and let scanError surface the reason
@@ -763,8 +824,9 @@ const ZSProvider = (() => {
   }
 
   // "/" = a fresh chat whose conversation id is not assigned yet → "" (transient)
-  // so the core never persists it as "started"; /c/<id> = a real conversation.
-  const conversationKey = () => (/^\/c\//.test(location.pathname) ? location.pathname : "");
+  // so the core never persists it as "started"; /c/<id> (and /g/<id>/c/<id>
+  // for Projects/Custom GPTs) = a real conversation.
+  const conversationKey = () => (/\/c\/[^/]+/.test(location.pathname) ? location.pathname : "");
 
   // ── ChatGPT-only system-prompt rules ──────────────────────────────────────
   // Appended to the shared system prompt via core/config.js's `providerNotes`
@@ -782,6 +844,7 @@ const ZSProvider = (() => {
     document.addEventListener(
       "keydown",
       (e) => {
+        if (!e.isTrusted) return;
         if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
         const ed = getEditor();
         if (!ed || !ed.contains(e.target)) return;
@@ -806,6 +869,7 @@ const ZSProvider = (() => {
     document.addEventListener(
       "click",
       (e) => {
+        if (!e.isTrusted) return;
         if (!getEditor()) return;
         const t = e.target;
         // Native "Continue generating" = a clear intent to RESUME after truncation.
@@ -845,8 +909,8 @@ const ZSProvider = (() => {
   const CMD_SHAPE = /"(?:command|tool)"\s*:\s*"|###\s*lua|###mcp_tool###/i;
   // Marker pair, for the UNFENCED case below. Kept separate from CMD_SHAPE so the
   // opener test can't also match the closer.
-  const CMD_OPEN = /###\s*(?:LUA|MCP_TOOL)\s*###/i;
-  const CMD_CLOSE = /###\s*END_(?:LUA|MCP_TOOL)\s*###/i;
+  const CMD_OPEN = /###\s*(?:lua(?:\s*[:\-_ ]\s*(?:edit|client|server))?\s*(?:###|---)|mcp_tool\s*###)/i;
+  const CMD_CLOSE = /###\s*end[_\- ]?(?:lua|mcp_tool)\s*###/i;
 
   function findToolBlockSpot(item /*, chip */) {
     const replies = [...item.querySelectorAll(S.reply)];
@@ -860,14 +924,19 @@ const ZSProvider = (() => {
       // 1. Fenced code blocks carrying a command.
       mc.querySelectorAll(S.codeWrap).forEach((pre) => {
         if (pre.closest(".zs-chip")) return;
-        if (CMD_SHAPE.test(pre.textContent || "")) hide(pre, mc);
+        const tapped = pre.querySelectorAll
+          ? [...pre.querySelectorAll(".cm-content[data-zs-cm]")].some((cm) => CMD_SHAPE.test(cm.getAttribute("data-zs-cm") || ""))
+          : false;
+        if (tapped || CMD_SHAPE.test(pre.textContent || "")) hide(pre, mc);
       });
       // 2. Bare top-level blocks with an inline command (no <pre> inside).
       const kids = [...mc.children];
       kids.forEach((el) => {
         if (el.classList.contains("zs-chip") || el.querySelector(S.codeWrap)) return;
         const t = el.textContent || "";
-        if (t.length < 600 && CMD_SHAPE.test(t)) hide(el, null);
+        const t0 = t.trim().replace(/^json\s*/i, "");
+        const startsAsCmd = /^\{\s*"(?:command|tool)"\s*:/.test(t0) || CMD_OPEN.test(t0);
+        if ((startsAsCmd || t.length < 600) && CMD_SHAPE.test(t)) hide(el, null);
       });
       // 3. UNFENCED command block spanning MANY siblings. Seen live 2026-08: the
       // model wrote ###LUA###…###END_LUA### as plain prose instead of a fenced
@@ -944,7 +1013,7 @@ const ZSProvider = (() => {
       if (d) diag = d;
       // Version beacon: stamp the loaded build onto <html> so a reload can be
       // confirmed from the page (read document.documentElement.dataset.zsGptVer).
-      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-08-13_cmtap+toolkey"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-21_chatgpt-fixes"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,

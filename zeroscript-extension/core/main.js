@@ -1008,6 +1008,29 @@
       });
       return `Output of '${name}':\n${requested} commands (${scoped.length}):\n\n${lines.join("\n\n")}`;
     }
+    // Virtual commands: ZeroScript Agent Skills (pro playbooks for UI,
+    // Building, Cutscenes, and user-authored skills).
+    if (name === "list_skills") {
+      const skills = ((A.bridge && A.bridge.skills) || []).filter((s) => s && s.enabled !== false);
+      if (!skills.length) {
+        return "Output of 'list_skills':\nNo agent skills are currently enabled. Enable or create skills in the ZeroScript desktop app (Environment > Skills).";
+      }
+      const list = skills.map((s) => `- ${s.id} [${s.category || "Skill"}] (${s.mode === "always" ? "always-on" : "auto"}): ${s.name}${s.tagline ? " — " + s.tagline : ""}`);
+      return `Output of 'list_skills':\nEnabled ZeroScript skills (${skills.length}):\n${list.join("\n")}\n\nCall {"command": "read_skill", "params": {"skill_id": "<id>"}} to load a full playbook.`;
+    }
+    if (name === "read_skill" || name === "get_skill") {
+      const sid = String(args.skill_id || args.id || args.name || "").trim();
+      if (!sid) {
+        const avail = ((A.bridge && A.bridge.skills) || []).filter((s) => s && s.enabled !== false).map((s) => s.id);
+        return `ERROR in ${name}: 'skill_id' parameter is required.${avail.length ? " Available skill IDs: " + avail.join(", ") : ""}`;
+      }
+      const r = await bg({ type: "read_skill", skill_id: sid });
+      if (!r || !r.ok || !r.skill) {
+        const avail = ((A.bridge && A.bridge.skills) || []).filter((s) => s && s.enabled !== false).map((s) => s.id);
+        return `ERROR in ${name}: ${(r && r.error) || `skill '${sid}' not found`}.${avail.length ? " Available skill IDs: " + avail.join(", ") : ""}`;
+      }
+      return `Output of '${name}':\n=== SKILL: ${r.skill.name} (${r.skill.id}) ===\n${r.skill.content || "(empty skill)"}`;
+    }
     if (A.toolNames.size && !A.toolNames.has(name)) {
       return ZS.FEEDBACK.unknownTool(name, [...A.toolNames]);
     }
@@ -1639,6 +1662,7 @@
       siteName: P.displayName,
       customPrompt: ui.getCustomPrompt(),
       providerNotes: P.promptExtra || "",
+      skills: (A.bridge && A.bridge.skills) || [],
     });
   }
 
@@ -1952,7 +1976,8 @@
     if (chip) chip.remove();
     item.classList.remove("zs-hidden");
     item.querySelectorAll(".zs-tool-hide").forEach((e) => e.classList.remove("zs-tool-hide"));
-    item.querySelectorAll(".zs-cmd-mask").forEach((e) => e.classList.remove("zs-cmd-mask"));
+    item.classList.remove("zs-cmd-mask", "zs-cmd-mask-all");
+    item.querySelectorAll(".zs-cmd-mask, .zs-cmd-mask-all").forEach((e) => e.classList.remove("zs-cmd-mask", "zs-cmd-mask-all"));
     delete item.dataset.zs;
     delete item.dataset.zsig;
     delete item.dataset.zphase;
@@ -3427,7 +3452,9 @@
         }
         if (!bar.classList.contains("zs-bar-inline")) {
           bar.classList.add("zs-bar-inline");
-          bar.style.cssText = ""; // drop any leftover float positioning
+          bar.style.left = "";
+          bar.style.top = "";
+          bar.style.width = ""; // drop any leftover float positioning without clearing provider grid styles
         }
         // Transparent (blends in) when mounted INSIDE the input box; surface card
         // when mounted ABOVE it. The provider's barMount() signals which via .inside.
@@ -4020,7 +4047,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.type === "zs-status") {
-      ui.setStatus({ connected: msg.connected, mcpAlive: msg.mcpAlive, studio: msg.studio, studioApp: msg.studioApp, studioProc: msg.studioProc, tools: msg.tools, servers: msg.servers });
+      ui.setStatus({ connected: msg.connected, mcpAlive: msg.mcpAlive, studio: msg.studio, studioApp: msg.studioApp, studioProc: msg.studioProc, tools: msg.tools, servers: msg.servers, skills: msg.skills });
     }
     if (msg && msg.type === "zs-open-menu") {
       ui.openMenu(false); // from the popup's Settings button — opens at the top (Switch AI / custom prompt)

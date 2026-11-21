@@ -16,44 +16,94 @@
 const fs = require("fs");
 
 // ── Stub DOM ────────────────────────────────────────────────────────────────
-// el("div", {class, attrs}, children) / txt("…"). Only the members textWithout
-// touches are implemented; anything else stays undefined on purpose so a future
+// el("div", {class, attrs}, children) / txt("…"). Only the members tested
+// here are implemented; anything else stays undefined on purpose so a future
 // change that needs more DOM fails loudly here instead of silently passing.
 function txt(v) {
   return { nodeType: 3, nodeValue: v, childNodes: [] };
 }
+function matchSimple(node, sel) {
+  const parts = sel.split(",").map((s) => s.trim()).filter(Boolean);
+  return parts.some((part) => {
+    let rest = part;
+    const tagM = rest.match(/^[a-z0-9_-]+/i);
+    if (tagM) {
+      if (node.tagName !== tagM[0].toUpperCase()) return false;
+      rest = rest.slice(tagM[0].length);
+    }
+    const attrRe = /\[([a-z0-9_-]+)(?:=(?:'([^']*)'|"([^"]*)"|([^\]]*)))?\]/gi;
+    let m;
+    while ((m = attrRe.exec(rest))) {
+      const val = node.getAttribute(m[1]);
+      if (val === null) return false;
+      const want = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : m[4]);
+      if (want !== undefined && val !== want) return false;
+    }
+    rest = rest.replace(attrRe, "");
+    const clsRe = /\.([a-z0-9_-]+)/gi;
+    while ((m = clsRe.exec(rest))) {
+      if (!node.classList.contains(m[1])) return false;
+    }
+    rest = rest.replace(clsRe, "");
+    return rest.trim() === "";
+  });
+}
 function el(tag, opts, children) {
   const o = opts || {};
-  const classes = (o.class || "").split(/\s+/).filter(Boolean);
+  const classes = new Set((o.class || "").split(/\s+/).filter(Boolean));
   const attrs = o.attrs || {};
+  const kids = (children || []).map((c) => (typeof c === "string" ? txt(c) : c));
   const node = {
     nodeType: 1,
     tagName: tag.toUpperCase(),
-    childNodes: (children || []).map((c) => (typeof c === "string" ? txt(c) : c)),
-    classList: { contains: (c) => classes.includes(c) },
+    parentElement: null,
+    childNodes: kids,
+    get children() { return this.childNodes.filter((c) => c.nodeType === 1); },
+    get textContent() {
+      return this.childNodes.map((c) => (c.nodeType === 3 ? c.nodeValue : c.textContent)).join("");
+    },
+    classList: {
+      contains: (c) => classes.has(c),
+      add: (...cs) => cs.forEach((c) => classes.add(c)),
+      remove: (...cs) => cs.forEach((c) => classes.delete(c)),
+    },
     getAttribute: (n) => (n in attrs ? attrs[n] : null),
-    matches: (sel) => classes.some((c) => sel.split(",").map((s) => s.trim()).includes("." + c)),
-  };
-  node.querySelector = (sel) => {
-    const hit = (n) => {
-      if (n.nodeType !== 1) return null;
-      if (n.matches(sel)) return n;
-      for (const c of n.childNodes) { const r = hit(c); if (r) return r; }
+    matches: (sel) => matchSimple(node, sel),
+    closest: (sel) => {
+      for (let cur = node; cur; cur = cur.parentElement) {
+        if (cur.nodeType === 1 && cur.matches(sel)) return cur;
+      }
       return null;
-    };
-    for (const c of node.childNodes) { const r = hit(c); if (r) return r; }
-    return null;
+    },
   };
+  kids.forEach((c) => { if (c.nodeType === 1) c.parentElement = node; });
+  node.querySelectorAll = (sel) => {
+    const out = [];
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c.nodeType !== 1) continue;
+        if (c.matches(sel)) out.push(c);
+        walk(c);
+      }
+    };
+    walk(node);
+    return out;
+  };
+  node.querySelector = (sel) => node.querySelectorAll(sel)[0] || null;
   return node;
 }
 
 // ── Load the provider against the stub globals ──────────────────────────────
+const dispatchedEvents = [];
+const docListeners = {};
+let stubQuerySelector = () => null;
+let stubQuerySelectorAll = () => [];
 global.document = {
-  querySelector: () => null,
-  querySelectorAll: () => [],
-  addEventListener: () => {},
-  dispatchEvent: () => {},
-  documentElement: { classList: { contains: () => false } },
+  querySelector: (s) => stubQuerySelector(s),
+  querySelectorAll: (s) => stubQuerySelectorAll(s),
+  addEventListener: (type, fn) => { (docListeners[type] = docListeners[type] || []).push(fn); },
+  dispatchEvent: (ev) => { dispatchedEvents.push(ev && ev.type); },
+  documentElement: { classList: { contains: () => false }, setAttribute: () => {} },
   body: null,
 };
 global.window = { location: { pathname: "/" }, addEventListener: () => {} };
@@ -76,8 +126,10 @@ const cmBlock = (lines, attrs) =>
   el("div", { class: "cm-content", attrs: attrs || {} },
      lines.map((l) => el("div", { class: "cm-line" }, l === "" ? [] : [l])));
 
+dispatchedEvents.length = 0;
 const collapsed = P.textWithout(cmBlock(["###LUA###", "return 1+1", "###END_LUA###"]));
 ok("cm-lines are newline-terminated", collapsed.includes("###LUA###\nreturn 1+1\n###END_LUA###"));
+ok("syncCM dispatches zs-cm-sync when called directly on .cm-content", dispatchedEvents.includes("zs-cm-sync"));
 
 // A blank source line is an EMPTY cm-line. Swallowing it shifts every Luau
 // error line number reported afterwards, so it must survive as "\n".
@@ -123,3 +175,59 @@ const withChip = P.textWithout(
   ".zs-chip"
 );
 ok("excluded subtree is skipped", withChip.includes("real reply") && !withChip.includes("execute_luau"));
+
+// ── conversationKey() routes ────────────────────────────────────────────────
+global.location.pathname = "/";
+ok("conversationKey returns empty string on /", P.conversationKey() === "");
+global.location.pathname = "/g/g-proj123";
+ok("conversationKey returns empty string on /g/<id>", P.conversationKey() === "");
+global.location.pathname = "/c/abc-123";
+ok("conversationKey captures /c/<id>", P.conversationKey() === "/c/abc-123");
+global.location.pathname = "/g/g-proj123/c/abc-123";
+ok("conversationKey captures /g/<id>/c/<conv-id>", P.conversationKey() === "/g/g-proj123/c/abc-123");
+global.location.pathname = "/";
+
+// ── findToolBlockSpot() unfenced ranges & large JSON blocks ─────────────────
+const pOpen = el("p", {}, ["###LUA:Server###"]);
+const pBody = el("p", {}, ["return game.PlaceId"]);
+const pClose = el("p", {}, ["###END-LUA###"]);
+const pProse = el("p", {}, ["Trailing explanation for the user."]);
+const mdUnfenced = el("div", { class: "markdown" }, [pOpen, pBody, pClose, pProse]);
+const itemUnfenced = el("div", { attrs: { "data-message-author-role": "assistant" } }, [mdUnfenced]);
+P.findToolBlockSpot(itemUnfenced);
+ok(
+  "findToolBlockSpot hides ###LUA:Server### ... ###END-LUA### range without hiding trailing prose",
+  pOpen.classList.contains("zs-tool-hide") &&
+  pBody.classList.contains("zs-tool-hide") &&
+  pClose.classList.contains("zs-tool-hide") &&
+  !pProse.classList.contains("zs-tool-hide") &&
+  !mdUnfenced.classList.contains("zs-cmd-mask-all")
+);
+
+const bigJsonP = el("p", {}, ['{"command":"multi_edit","params":{"data":"' + "a".repeat(700) + '"}}']);
+const itemBigJson = el("div", { attrs: { "data-message-author-role": "assistant" } }, [el("div", { class: "markdown" }, [bigJsonP])]);
+P.findToolBlockSpot(itemBigJson);
+ok("findToolBlockSpot hides large (>600 char) unfenced JSON command paragraph", bigJsonP.classList.contains("zs-tool-hide"));
+
+// ── installSendHooks() ignores untrusted clicks ─────────────────────────────
+const editorStub = el("div", { attrs: { id: "prompt-textarea" } }, ["hello"]);
+const stopBtnStub = el("button", { attrs: { "data-testid": "stop-button" } }, ["Stop"]);
+stopBtnStub.offsetParent = {};
+stubQuerySelector = (s) => (s.includes("#prompt-textarea") ? editorStub : null);
+stubQuerySelectorAll = (s) => (s.includes("stop-button") ? [stopBtnStub] : []);
+let nativeStops = 0;
+P.installSendHooks({
+  isBlocked: () => false,
+  isStarted: () => true,
+  onBlockedAttempt: () => {},
+  onUserMessage: () => {},
+  onNativeStop: () => { nativeStops++; },
+  onNativeContinue: () => {},
+});
+const clickHook = docListeners.click[docListeners.click.length - 1];
+clickHook({ isTrusted: false, target: stopBtnStub });
+ok("installSendHooks ignores untrusted (isTrusted: false) stop clicks", nativeStops === 0);
+clickHook({ isTrusted: true, target: stopBtnStub });
+ok("installSendHooks handles trusted (isTrusted: true) stop clicks", nativeStops === 1);
+stubQuerySelector = () => null;
+stubQuerySelectorAll = () => [];
