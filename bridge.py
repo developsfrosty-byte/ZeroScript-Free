@@ -90,6 +90,15 @@ LOG_BUFFER = collections.deque(maxlen=400)
 LOG_LOCK = threading.Lock()
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
+
+def _win_hidden_kwargs():
+    if sys.platform != "win32":
+        return {}
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": _NO_WINDOW, "startupinfo": si}
+
 # The primary server. It is always present, added by the installer, and can
 # never be edited/removed through the extension (it is what ZeroScript is FOR).
 PRIMARY_SERVER_ID = "roblox"
@@ -887,7 +896,7 @@ class MCPClient:
                         errors="replace",
                         cwd=HERE,
                         env=env,
-                        creationflags=_NO_WINDOW,
+                        **_win_hidden_kwargs(),
                     )
                 except FileNotFoundError:
                     # The OS couldn't find cmd[0] at all - this is a config

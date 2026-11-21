@@ -28,6 +28,15 @@ MAC_STUDIO_EXECUTABLES = ("RobloxStudio", "RobloxStudioBeta", "Roblox")
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
+def _win_hidden_kwargs():
+    if sys.platform != "win32":
+        return {}
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": _NO_WINDOW, "startupinfo": si}
+
+
 def _candidate_roots() -> list[Path]:
     """Directories that may contain Roblox Studio version folders (Windows)."""
     roots: list[Path] = []
@@ -146,7 +155,7 @@ def main() -> int:
         return 1
     sys.stderr.write(f"launch_studio_mcp: using {exe}\n")
     sys.stderr.flush()
-    proc = subprocess.Popen([str(exe)] + sys.argv[1:], creationflags=_NO_WINDOW)
+    proc = subprocess.Popen([str(exe)] + sys.argv[1:], **_win_hidden_kwargs())
     try:
         return proc.wait()
     except KeyboardInterrupt:

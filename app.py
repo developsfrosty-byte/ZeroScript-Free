@@ -430,8 +430,12 @@ class AppHandler(BaseHTTPRequestHandler):
         return self._send_json(404, {"ok": False, "error": f"unknown route: {path}"})
 
 
+class _SingleHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+
 def create_http_server(host="127.0.0.1", port=17614):
-    return ThreadingHTTPServer((host, port), AppHandler)
+    return _SingleHTTPServer((host, port), AppHandler)
 
 
 def _start_bridge_thread():
@@ -537,11 +541,35 @@ def _run_tray(app_url):
     qapp.exec()
 
 
+_INSTANCE_MUTEX = None
+
+
+def _acquire_single_instance_mutex():
+    global _INSTANCE_MUTEX
+    if sys.platform != "win32":
+        return True
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        handle = k32.CreateMutexW(None, False, "Local\\ZeroScriptDesktopAppMutex")
+        if handle and k32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            k32.CloseHandle(handle)
+            return False
+        _INSTANCE_MUTEX = handle
+    except Exception:
+        pass
+    return True
+
+
 def main():
     global _http_server
     settings = skills_manager.load_settings()
     port = int(os.environ.get("ZS_APP_PORT") or settings.get("appPort") or 17614)
     app_url = f"http://127.0.0.1:{port}"
+
+    if _existing_instance_alive(port) or not _acquire_single_instance_mutex():
+        open_app_window(app_url)
+        return
 
     try:
         _http_server = create_http_server("127.0.0.1", port)
