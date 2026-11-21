@@ -99,6 +99,18 @@ def _win_hidden_kwargs():
     si.wShowWindow = subprocess.SW_HIDE
     return {"creationflags": _NO_WINDOW, "startupinfo": si}
 
+
+def _console_python():
+    """Return python.exe (sibling of pythonw.exe when running in GUI/tray mode)
+    so child .py stdio MCP servers inherit standard pipes properly while staying
+    windowless via _win_hidden_kwargs()."""
+    exe = sys.executable
+    if sys.platform == "win32" and exe.lower().endswith("pythonw.exe"):
+        cand = os.path.join(os.path.dirname(exe), "python.exe")
+        if os.path.isfile(cand):
+            return cand
+    return exe
+
 # The primary server. It is always present, added by the installer, and can
 # never be edited/removed through the extension (it is what ZeroScript is FOR).
 PRIMARY_SERVER_ID = "roblox"
@@ -871,7 +883,14 @@ class MCPClient:
                 script = cmd[0]
                 if not os.path.isabs(script):
                     script = os.path.join(HERE, script)
-                cmd = [sys.executable, script] + cmd[1:]
+                if os.path.basename(script).lower() == "launch_studio_mcp.py" and _studio_scan is not None:
+                    exe = _studio_scan.find_studio_mcp()
+                    if exe:
+                        cmd = [str(exe)] + cmd[1:]
+                    else:
+                        cmd = [_console_python(), script] + cmd[1:]
+                else:
+                    cmd = [_console_python(), script] + cmd[1:]
             # On Windows, npx/npm/yarn/pnpm/bunx are .cmd shims that Popen can't
             # launch directly (WinError 2). Run them through cmd.exe so any
             # node-based MCP server "just works" from config.json.

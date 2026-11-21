@@ -28,15 +28,6 @@ MAC_STUDIO_EXECUTABLES = ("RobloxStudio", "RobloxStudioBeta", "Roblox")
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
-def _win_hidden_kwargs():
-    if sys.platform != "win32":
-        return {}
-    si = subprocess.STARTUPINFO()
-    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    si.wShowWindow = subprocess.SW_HIDE
-    return {"creationflags": _NO_WINDOW, "startupinfo": si}
-
-
 def _candidate_roots() -> list[Path]:
     """Directories that may contain Roblox Studio version folders (Windows)."""
     roots: list[Path] = []
@@ -144,18 +135,26 @@ def find_studio_mcp() -> Optional[Path]:
     return _find_studio_mcp_windows()
 
 
+def _err(msg):
+    if sys.stderr is not None:
+        try:
+            sys.stderr.write(msg)
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+
 def main() -> int:
     exe = find_studio_mcp()
     binary_name = "StudioMCP" if sys.platform == "darwin" else "StudioMCP.exe"
     if not exe:
-        sys.stderr.write(
+        _err(
             f"launch_studio_mcp: no {binary_name} found. Open Roblox Studio and "
             "enable 'Studio as MCP server' (Assistant Settings > MCP Servers).\n"
         )
         return 1
-    sys.stderr.write(f"launch_studio_mcp: using {exe}\n")
-    sys.stderr.flush()
-    proc = subprocess.Popen([str(exe)] + sys.argv[1:], **_win_hidden_kwargs())
+    _err(f"launch_studio_mcp: using {exe}\n")
+    proc = subprocess.Popen([str(exe)] + sys.argv[1:])
     try:
         return proc.wait()
     except KeyboardInterrupt:
