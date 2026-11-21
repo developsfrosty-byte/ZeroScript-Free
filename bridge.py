@@ -88,6 +88,7 @@ EMBEDDED_MODE = False
 START_TIME = time.time()
 LOG_BUFFER = collections.deque(maxlen=400)
 LOG_LOCK = threading.Lock()
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 # The primary server. It is always present, added by the installer, and can
 # never be edited/removed through the extension (it is what ZeroScript is FOR).
@@ -256,7 +257,7 @@ def _port_owner(port):
             out += subprocess.run(
                 ["netstat", "-ano", "-p", proto],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=8,
+                timeout=8, creationflags=_NO_WINDOW,
             ).stdout
         except Exception:
             pass
@@ -281,7 +282,7 @@ def _port_owner(port):
              f"$p=Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
              f"if($p){{$p.Name; $p.Path}}"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=8,
+            timeout=8, creationflags=_NO_WINDOW,
         ).stdout.splitlines()
         ps = [l.strip() for l in ps if l.strip()]
         if ps:
@@ -301,7 +302,7 @@ def _roblox_studio_app_running():
         out = subprocess.run(
             ["tasklist", "/FI", "IMAGENAME eq RobloxStudioBeta.exe"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=8,
+            timeout=8, creationflags=_NO_WINDOW,
         ).stdout
     except Exception:
         return None
@@ -337,7 +338,7 @@ def _kill_orphan_studio_mcp():
         out = subprocess.run(
             ["tasklist", "/FI", "IMAGENAME eq StudioMCP.exe"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=8,
+            timeout=8, creationflags=_NO_WINDOW,
         ).stdout
     except Exception:
         return
@@ -347,7 +348,7 @@ def _kill_orphan_studio_mcp():
         "cleaning them up (known cause of a phantom 'Studio connected' state).", "yl")
     try:
         subprocess.run(["taskkill", "/F", "/IM", "StudioMCP.exe"],
-                       capture_output=True, text=True, timeout=8)
+                       capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
     except Exception as e:
         log(f"could not clean up orphaned StudioMCP.exe: {e}", "rd")
 
@@ -363,7 +364,7 @@ def _descendant_pids(root_pid):
              "Get-CimInstance Win32_Process | ForEach-Object "
              "{ \"$($_.ProcessId) $($_.ParentProcessId)\" }"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=10,
+            timeout=10, creationflags=_NO_WINDOW,
         ).stdout
     except Exception:
         return None
@@ -427,7 +428,7 @@ def _reclaim_studio_port(client):
         "registered to it, so our proxy sees 0 tools.", "yl")
     try:
         subprocess.run(["taskkill", "/F", "/PID", str(pid_i)],
-                       capture_output=True, text=True, timeout=8)
+                       capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
     except Exception as e:
         log(f"could not kill the leftover StudioMCP.exe: {e}", "rd")
         return False
@@ -450,7 +451,7 @@ def _process_cmdline(pid):
              f"(Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" "
              f"-ErrorAction SilentlyContinue).CommandLine"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=8,
+            timeout=8, creationflags=_NO_WINDOW,
         ).stdout
     except Exception:
         return ""
@@ -497,7 +498,7 @@ def _reclaim_bridge_port():
         "previous session - killing it so this one can start.", "yl")
     try:
         subprocess.run(["taskkill", "/F", "/PID", str(pid_i)],
-                       capture_output=True, text=True, timeout=8)
+                       capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
     except Exception as e:
         log(f"could not kill the leftover bridge (pid {pid_i}): {e}", "rd")
         return False
@@ -528,7 +529,7 @@ def _kill_port_squatter():
             "there are 0 tools.", "yl")
         try:
             subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                           capture_output=True, text=True, timeout=8)
+                           capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
         except Exception as e:
             log(f"could not kill '{name}': {e}", "rd")
             return False, name
@@ -551,7 +552,7 @@ def _kill_port_squatter():
     for img in ("ropilot-infra-helper.exe", "ropilot-infra.exe", "ropilot.exe"):
         try:
             res = subprocess.run(["taskkill", "/F", "/IM", img],
-                                 capture_output=True, text=True, timeout=8)
+                                 capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
         except Exception:
             continue
         if res.returncode == 0:
@@ -626,7 +627,7 @@ def check_studio_port():
     if ans in ("y", "yes", "o", "oui"):
         try:
             subprocess.run(["taskkill", "/F", "/PID", str(pid)],
-                           capture_output=True, text=True, timeout=8)
+                           capture_output=True, text=True, timeout=8, creationflags=_NO_WINDOW)
             log(f"killed {name} (pid {pid}). Studio can use the port now.", "cy")
             # Tell the user the finishing step IMMEDIATELY, here, instead of only
             # after the ~48s server-launch grace loop that follows: killing the
@@ -788,7 +789,7 @@ def restart_self():
         # so the user still ends up with a running, up-to-date bridge.
         log(f"in-place restart failed ({e}); spawning a fresh bridge...", "rd")
         try:
-            subprocess.Popen([sys.executable] + argv, cwd=HERE)
+            subprocess.Popen([sys.executable] + argv, cwd=HERE, creationflags=_NO_WINDOW)
         except Exception as e2:
             log(f"could not spawn a fresh bridge: {e2} - please restart it manually", "rd")
         os._exit(0)
@@ -886,6 +887,7 @@ class MCPClient:
                         errors="replace",
                         cwd=HERE,
                         env=env,
+                        creationflags=_NO_WINDOW,
                     )
                 except FileNotFoundError:
                     # The OS couldn't find cmd[0] at all - this is a config
@@ -962,7 +964,7 @@ class MCPClient:
                 if sys.platform == "win32":
                     subprocess.run(
                         ["taskkill", "/F", "/T", "/PID", str(self.proc.pid)],
-                        capture_output=True, timeout=8,
+                        capture_output=True, timeout=8, creationflags=_NO_WINDOW,
                     )
                 else:
                     self.proc.terminate()

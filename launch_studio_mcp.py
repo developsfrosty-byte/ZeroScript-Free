@@ -25,6 +25,7 @@ from typing import Iterable, Optional
 ENV_OVERRIDE = "ZS_STUDIO_MCP_PATH"
 WINDOWS_STUDIO_EXECUTABLES = ("RobloxStudioBeta.exe", "RobloxStudio.exe")
 MAC_STUDIO_EXECUTABLES = ("RobloxStudio", "RobloxStudioBeta", "Roblox")
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
 def _candidate_roots() -> list[Path]:
@@ -145,7 +146,7 @@ def main() -> int:
         return 1
     sys.stderr.write(f"launch_studio_mcp: using {exe}\n")
     sys.stderr.flush()
-    proc = subprocess.Popen([str(exe)] + sys.argv[1:])
+    proc = subprocess.Popen([str(exe)] + sys.argv[1:], creationflags=_NO_WINDOW)
     try:
         return proc.wait()
     except KeyboardInterrupt:
