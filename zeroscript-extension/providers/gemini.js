@@ -559,11 +559,17 @@ const ZSProvider = (() => {
   const conversationKey = () =>
     (chatIsEmpty() || /\/app\/?$/.test(location.pathname)) ? "" : location.pathname;
 
+  // ── Gemini-only system-prompt rules ───────────────────────────────────────
+  // Gemini tends to drift back into plain-text coding mode in longer sessions,
+  // outputting a Lua module and telling the user to paste it into Studio.
+  const PROMPT_EXTRA = `- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: this browser extension is live in this page for the entire session. Never write notes like "ZeroScript's command bridge isn't active in this session" or "paste the module above into Roblox Studio" — always emit a fenced ZeroScript command block (multi_edit for scripts, or a fenced ###LUA### ... ###END_LUA### block for execute_luau) so the extension executes it directly inside Roblox Studio.`;
+
   // ── User-send interception ────────────────────────────────────────────────
   function installSendHooks(handlers) {
     document.addEventListener(
       "keydown",
       (e) => {
+        if (!e.isTrusted) return;
         if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
         const ed = getEditor();
         if (!ed || !ed.contains(e.target)) return;
@@ -582,6 +588,7 @@ const ZSProvider = (() => {
     document.addEventListener(
       "click",
       (e) => {
+        if (!e.isTrusted) return;
         if (!getEditor()) return;
         const btn = e.target && e.target.closest && e.target.closest(`${S.inputArea} button`);
         if (!btn) return;
@@ -592,7 +599,6 @@ const ZSProvider = (() => {
           // send - that synthetic click (isTrusted=false) must NOT be mistaken
           // for the user halting the agent, or the next legit command gets
           // marked "stopped" and the loop wrongly winds down (seen live).
-          if (!e.isTrusted) return;
           handlers.onNativeStop();
           return;
         }
@@ -687,12 +693,15 @@ const ZSProvider = (() => {
     // exists (fixes premature loop.end on the previous turn's stable text).
     reliableCounts: true,
     // Shown as a permanent, non-intrusive notice in the ZeroScript panel.
-    // Gemini drifts away from emitting tool blocks after a while in long
-    // sessions - observed live, model behavior, not something the prompt fixes.
+    // Gemini tends to drift away from emitting tool blocks after a while in
+    // long sessions - ZeroScript auto-refreshes its prompt and auto-recovers
+    // when it forgets, though starting a new session helps in very long chats.
     unstableWarning:
-      "Gemini tends to stop using the Roblox tools after a while in long sessions (model behavior, not the extension). " +
-      "If it starts answering in plain text instead of acting, remind it to use the commands - or start a new session.",
-    init({ diag: d } = {}) { if (d) diag = d; },
+      "Gemini can drift back into plain-text replies in very long sessions. ZeroScript auto-refreshes its instructions and auto-recovers if it forgets, or you can start a new session anytime.",
+    init({ diag: d } = {}) {
+      if (d) diag = d;
+      try { document.documentElement.setAttribute("data-zs-gem-ver", "2026-11-21_gemini-fixes"); } catch {}
+    },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, readAssistant,
@@ -707,5 +716,8 @@ const ZSProvider = (() => {
     // actions
     attachImages, clearAttachments, conversationKey,
     installSendHooks, findToolBlockSpot,
+    promptExtra: PROMPT_EXTRA,
+    resendSystemEvery: 4,
+    sendCharBudget: SEND_MAX_CHARS - 4000,
   };
 })();

@@ -837,7 +837,8 @@ const ZSProvider = (() => {
   // producing a new picture instead of doing the Roblox work the image was
   // meant to illustrate. Its native image tool also runs in the sandbox that
   // cannot touch the user's project, so a generated image is a dead end here.
-  const PROMPT_EXTRA = `- WHEN THE USER SENDS AN IMAGE: by default it is REFERENCE MATERIAL for the work they want done in their project - a screenshot of a bug, a mockup of the UI they want, a photo of the thing to build, a picture of what is wrong in Studio. Look at it, use it to understand what they want, and then do that work with the ZeroScript commands. Do NOT generate a new image from it, and do NOT treat it as an image-editing request. Only generate an image when the user EXPLICITLY asks you to create, generate, draw or edit one ("make me an image of...", "generate a texture", "edit this picture"). If what they want from the image is genuinely unclear, ask them in one short sentence rather than guessing - and never guess "they want a picture".`;
+  const PROMPT_EXTRA = `- WHEN THE USER SENDS AN IMAGE: by default it is REFERENCE MATERIAL for the work they want done in their project - a screenshot of a bug, a mockup of the UI they want, a photo of the thing to build, a picture of what is wrong in Studio. Look at it, use it to understand what they want, and then do that work with the ZeroScript commands. Do NOT generate a new image from it, and do NOT treat it as an image-editing request. Only generate an image when the user EXPLICITLY asks you to create, generate, draw or edit one ("make me an image of...", "generate a texture", "edit this picture"). If what they want from the image is genuinely unclear, ask them in one short sentence rather than guessing - and never guess "they want a picture".
+- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: this browser extension is live in this page for the entire session. Never write notes like "ZeroScript's command bridge isn't active in this session" or "paste the module above into Roblox Studio" — always emit a fenced ZeroScript command block (multi_edit or ###LUA### ... ###END_LUA###) so the extension executes it directly in Studio.`;
 
   // ── User-send interception ────────────────────────────────────────────────
   function installSendHooks(handlers) {
@@ -1013,7 +1014,7 @@ const ZSProvider = (() => {
       if (d) diag = d;
       // Version beacon: stamp the loaded build onto <html> so a reload can be
       // confirmed from the page (read document.documentElement.dataset.zsGptVer).
-      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-21_chatgpt-fixes"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-21_chatgpt-fixes-v2"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
@@ -1038,7 +1039,7 @@ const ZSProvider = (() => {
     // extension executes this" part, then refuses to call commands at all. No
     // other provider has shown this, so no other provider sets these - they
     // stay on the single bootstrap prompt.
-    resendSystemEvery: 6,   // user turns between re-statements
+    resendSystemEvery: 4,   // user turns between re-statements
     // Ceiling for "result + system-prompt rider". Measured against the real cap
     // (SEND_HARD_CAP) rather than our 120k perf cap: the rider is added AFTER
     // truncateForSend, so budgeting at 120k would needlessly defer the rider for

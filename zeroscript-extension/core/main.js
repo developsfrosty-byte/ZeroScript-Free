@@ -1247,6 +1247,31 @@
     try { return JSON.stringify(a, null, 2); } catch { return String(a); }
   }
 
+  // Matches plain-text replies where a model falsely claims ZeroScript's bridge
+  // is offline/inactive or tells the user to manually paste code into Roblox Studio.
+  const BRIDGE_AMNESIA_RE = new RegExp([
+    "\\b(?:zeroscript['’]?s?\\s+)?(?:command\\s+)?bridge\\s+(?:is\\s*not|isn['’]t|was\\s*not|wasn['’]t|appears?\\s+(?:to\\s+be\\s+)?)\\s*(?:active|connected|running|available|enabled|working|online)\\b",
+    "\\b(?:zeroscript['’]?s?\\s+)?(?:command\\s+)?bridge\\s+(?:is\\s+)?(?:offline|inactive|disconnected|unavailable)\\b",
+    "\\b(?:can['’]?t|cannot|unable\\s+to)\\s+(?:invoke|execute|run|call|access|reach|connect\\s+to)\\s+(?:those\\s+|any\\s+|zeroscript\\s+|roblox\\s+studio\\s+)?(?:commands?|tools?|mcp|bridge|roblox\\s+studio)\\b.{0,45}\\b(?:this\\s+session|directly|right\\s+now|from\\s+here)\\b",
+    "\\bno\\s+active\\s+(?:zeroscript|command|mcp|tool)\\s+(?:bridge|connection|session)\\b",
+    "\\b(?:paste|copy\\s+and\\s+paste)\\s+(?:the|this)\\s+(?:code|script|module|luau|lua)\\s+(?:above\\s+)?into\\s+(?:your\\s+|a\\s+)?.{0,45}\\b(?:roblox\\s+studio|serverscriptservice|replicatedstorage|startergui|starterplayerscripts|startercharacterscripts|modulescript|localscript)\\b",
+  ].join("|"), "i");
+
+  function isBridgeLive() {
+    const s = A.bridge || {};
+    if (!s.connected) return false;
+    const servers = s.servers || [];
+    const roblox = servers.find((x) => x.id === "roblox");
+    const mcpUp = roblox ? !!roblox.alive : (!!s.mcpAlive || servers.some((x) => x.alive));
+    const robloxTools = roblox ? (roblox.tools || 0) : (s.tools || 0);
+    const mcpOk = mcpUp || robloxTools > 0 || A.toolList.length > 0;
+    return mcpOk && s.studio !== false;
+  }
+
+  function looksLikeBridgeAmnesia(txt) {
+    return !!(txt && BRIDGE_AMNESIA_RE.test(txt));
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   //  AGENTIC LOOP
   // ════════════════════════════════════════════════════════════════════════
@@ -1260,6 +1285,8 @@
     A.loopKey = null; // pinned by syncSessionState once this chat has an id + content
     let truncCount = 0;
     const MAX_TRUNC = 6;
+    let amnesiaNudges = 0;
+    const MAX_AMNESIA_NUDGES = 1;
     // Re-send the command list after this many successful tool calls. Kept high
     // so the reminder does not bloat the context too often.
     const REMIND_TOOLS_EVERY = 20;
@@ -1369,9 +1396,22 @@
           base = await submitAndGetBase(ZS.FEEDBACK.parseError(res.reason, failName));
           continue;
         }
-        if (res.kind === "text") break; // final answer
+        if (res.kind === "text") {
+          if (A.started && amnesiaNudges < MAX_AMNESIA_NUDGES && isBridgeLive() && looksLikeBridgeAmnesia(res.text)) {
+            amnesiaNudges++;
+            resetSysCount();
+            A.sysResendAt = Date.now();
+            diag("amnesia.recover", { nudge: amnesiaNudges, len: (res.text || "").length });
+            ui.toast("Reminding AI that ZeroScript bridge is active…");
+            const cap = P.sendCharBudget || Infinity;
+            base = await submitAndGetBase(ZS.FEEDBACK.bridgeAmnesia(systemPrompt(), cap));
+            continue;
+          }
+          break; // final answer
+        }
 
         if (res.kind === "tool") {
+          amnesiaNudges = 0;
           const calls = res.calls;
           if (calls.length > 1) {
             base = await submitAndGetBase(ZS.FEEDBACK.multiTool(calls.map((c) => c.tool || "?")));
@@ -1684,7 +1724,7 @@
   // once the window has elapsed with nothing to piggyback on.
   const RESEND_SYS_EVERY = P.resendSystemEvery || 0;
   // Injected tool results get their own, larger budget (see sysResendDue).
-  const RESEND_SYS_EVERY_RESULTS = 12;
+  const RESEND_SYS_EVERY_RESULTS = 8;
 
   // How much conversation has accumulated since the operating instructions were
   // last stated. PERSISTED per conversation, because both simpler designs failed
