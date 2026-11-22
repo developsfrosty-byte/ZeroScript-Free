@@ -32,12 +32,13 @@ const ZSProvider = (() => {
       '[contenteditable]:not([contenteditable="false"])',
     ],
     runSels: [
+      "ms-run-button button",
       "run-button button",
       "button.run-button",
       'button[aria-label="Run"]',
-      'button[aria-label*="Run" i]',
-      'button[aria-label*="Send" i]',
-      'button[type="submit"]',
+      'button[aria-label="Run prompt" i]',
+      'button[aria-label="Send"]',
+      'button[aria-label="Send message" i]',
     ],
     stopSels: [
       "run-button.stoppable button",
@@ -58,9 +59,9 @@ const ZSProvider = (() => {
 
   const timings = {
     GEN_IDLE_MS: 1500,
-    REASON_IDLE_MS: 14000,
+    REASON_IDLE_MS: 18000,
     WARMUP_MS: 45000,
-    REASON_NOREPLY_MS: 90000,
+    REASON_NOREPLY_MS: 120000,
     STABLE_MS: 9000,
     RESPONSE_TIMEOUT_MS: 300000,
   };
@@ -312,12 +313,17 @@ const ZSProvider = (() => {
 
   const isInTurn = (b) => !!(b && b.closest && b.closest("ms-chat-turn, [data-turn-role]"));
 
+  const BAD_RUN_RE = /setting|panel|toggle|rerun/i;
+  const EXPLICIT_RUN_RE = /^\s*(?:run|send)(?:\s+ctrl|\s*⌘|\s*↵|\s+prompt|\s*$)/i;
+
   function isStopBtn(b) {
     if (!b || isInTurn(b) || (b.closest && b.closest("#zs-root"))) return false;
+    const rawTxt = (b.textContent || "").replace(/\s+/g, " ").trim();
+    const sig = `${b.getAttribute("aria-label") || ""} ${rawTxt}`;
+    if (EXPLICIT_RUN_RE.test(rawTxt) && !/\b(?:stop|cancel|abort|interrupt|arr[êe]t)\b/i.test(sig)) return false;
     if (b.classList && b.classList.contains("stoppable")) return true;
-    if (b.closest && b.closest("run-button.stoppable, .stoppable")) return true;
+    if (b.closest && b.closest("run-button.stoppable, ms-run-button.stoppable, .stoppable")) return true;
     if (b.matches && b.matches('[data-testid*="stop" i]')) return true;
-    const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`;
     if (/\b(?:stop|cancel|abort|interrupt|arr[êe]t)\b/i.test(sig)) return true;
     const icon = b.querySelector && b.querySelector("mat-icon");
     if (icon) {
@@ -325,28 +331,40 @@ const ZSProvider = (() => {
       if (name === "stop" || name === "stop_circle" || name === "stop_circle_outline") return true;
     }
     const comp = barAnchor() || composerFrame();
-    const inComposer = (comp && comp.contains(b)) || !!(b.closest && b.closest("run-button, ms-prompt-input-wrapper"));
+    const inComposer = (comp && comp.contains(b)) || !!(b.closest && b.closest("run-button, ms-run-button, ms-prompt-input-wrapper"));
     if (inComposer && !NON_SEND_BTN_RE.test(sig) && b.querySelector && b.querySelector("svg rect")) return true;
     return false;
   }
 
-  const NON_SEND_BTN_RE = /stop|cancel|abort|interrupt|arr[êe]t|mic|voice|audio|record|dictat|attach|upload|file|image|add|plus|tune|setting|clear|compare|system|token|code|menu|close|dismiss|default|model/i;
+  const NON_SEND_BTN_RE = /stop|cancel|abort|interrupt|arr[êe]t|mic|voice|audio|record|dictat|attach|upload|file|image|add|plus|tune|setting|panel|toggle|rerun|history|tool|grounding|search|credit|claim|share|edit|structured|function|clear|compare|system|token|code|menu|close|dismiss|default|model/i;
   function sendButton() {
     for (const sel of S.runSels) {
       for (const b of document.querySelectorAll(sel)) {
+        const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`;
+        if (BAD_RUN_RE.test(sig)) continue;
         if (!isInTurn(b) && !isStopBtn(b) && isVisibleBox(b)) return b;
       }
     }
     const ed = getEditor();
-    const scope = barAnchor() || composerFrame() || (ed && ed.parentElement);
-    if (!scope || !scope.querySelectorAll) return null;
+    const composerScope = barAnchor() || composerFrame() || (ed && ed.closest && ed.closest("ms-prompt-input-wrapper, footer, main")) || document;
+    if (composerScope && composerScope.querySelectorAll) {
+      for (const b of composerScope.querySelectorAll("button")) {
+        if (isInTurn(b) || !isVisibleBox(b) || isStopBtn(b)) continue;
+        const normAria = (b.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+        const normTxt = (b.innerText || b.textContent || "").replace(/\s+/g, " ").trim();
+        if (BAD_RUN_RE.test(`${normAria} ${normTxt}`)) continue;
+        if (EXPLICIT_RUN_RE.test(normTxt) || EXPLICIT_RUN_RE.test(normAria)) return b;
+      }
+    }
+    const tightScope = barAnchor() || composerFrame() || (ed && ed.parentElement);
+    if (!tightScope || !tightScope.querySelectorAll) return null;
     let best = null;
     let bestRight = -Infinity;
-    for (const b of scope.querySelectorAll("button")) {
+    for (const b of tightScope.querySelectorAll("button")) {
       if (isInTurn(b) || !isVisibleBox(b) || isStopBtn(b)) continue;
       const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`.trim();
-      if (/\b(?:run|send|submit)\b/i.test(sig)) return b;
-      if (!b.querySelector("svg, mat-icon") || NON_SEND_BTN_RE.test(sig)) continue;
+      if (NON_SEND_BTN_RE.test(sig)) continue;
+      if (!b.querySelector("svg, mat-icon")) continue;
       const r = b.getBoundingClientRect ? b.getBoundingClientRect() : null;
       const right = r ? r.right : 0;
       if (right >= bestRight) { bestRight = right; best = b; }
@@ -401,7 +419,7 @@ const ZSProvider = (() => {
   }
   const grewWithin = (ms) => _streamMax > 1 && Date.now() - _streamAt < ms;
 
-  const WEDGE_MS = 45000;
+  const WEDGE_MS = 60000;
   let _stopSince = 0;
   function genActive() {
     sampleStream();
@@ -507,23 +525,44 @@ const ZSProvider = (() => {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
       else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
+    const isBtnReady = (b) => !!b && !b.disabled && b.getAttribute("aria-disabled") !== "true";
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
       if (editorText() !== text) await setEditorText(ed, text);
       if (images && images.length) {
         try { await attachImages(images); } catch {}
       }
-      await waitFor(() => { const b = sendButton(); return !!b && !b.disabled; }, 3500);
+      await waitFor(() => isBtnReady(sendButton()), 3500);
       const btn = sendButton();
-      if (btn && !btn.disabled) { btn.click(); return; }
+      diag("aistudio.send", {
+        len: text.length,
+        btnText: (btn && (btn.innerText || btn.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40)) || "",
+        aria: (btn && btn.getAttribute("aria-label")) || "",
+        disabled: btn ? !!btn.disabled : null,
+        ariaDisabled: btn ? btn.getAttribute("aria-disabled") : null,
+      });
+      if (isBtnReady(btn)) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+      }
       const ctrlEnter = { key: "Enter", code: "Enter", keyCode: 13, which: 13, ctrlKey: true, bubbles: true, cancelable: true };
+      ed.focus();
       ed.dispatchEvent(new KeyboardEvent("keydown", ctrlEnter));
       ed.dispatchEvent(new KeyboardEvent("keyup", ctrlEnter));
-      await sleep(120);
-      if (editorText().trim() !== "" && !stopButton()) {
-        const plainEnter = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-        ed.dispatchEvent(new KeyboardEvent("keydown", plainEnter));
-        ed.dispatchEvent(new KeyboardEvent("keyup", plainEnter));
+      document.dispatchEvent(new KeyboardEvent("keydown", ctrlEnter));
+      document.dispatchEvent(new KeyboardEvent("keyup", ctrlEnter));
+      if (await waitFor(wasSent, 250)) return;
+      const btn2 = sendButton();
+      if (isBtnReady(btn2)) {
+        for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+          btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+        }
+        if (await waitFor(wasSent, 300)) return;
       }
+      const plainEnter = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+      ed.dispatchEvent(new KeyboardEvent("keydown", plainEnter));
+      ed.dispatchEvent(new KeyboardEvent("keyup", plainEnter));
     } finally {
       if (relock) setInputLock(true);
     }
@@ -737,7 +776,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-22_v1.7.1"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-22_v1.7.2"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
