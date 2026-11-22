@@ -71,10 +71,10 @@ const ZSProvider = (() => {
     editor: "#prompt-textarea",
     // The ONE submit control; its data-testid says whether it is currently a
     // send or a stop button (see isStopBtn). Id first - it survives testid churn.
-    submitBtn: "#composer-submit-button, button[data-testid='send-button'], button[data-testid='stop-button']",
+    submitBtn: "#composer-submit-button, button[data-testid='send-button'], button[data-testid='stop-button'], button[data-testid*='stop' i], button[aria-label*='Stop' i]",
     // Kept for installSendHooks, which needs to recognise a click on the native
     // stop control wherever it lives.
-    stopBtn: "button[data-testid='stop-button']",
+    stopBtn: "button[data-testid='stop-button'], button[data-testid*='stop' i]",
     codeWrap: "pre",
     // composer frame: the <form> that wraps the ProseMirror editor.
     errorSurfaces: '[role="alert"],[data-testid*="error"],[class*="error-message"]',
@@ -116,7 +116,48 @@ const ZSProvider = (() => {
   };
 
   // ── Turn classification ───────────────────────────────────────────────────
-  const role = (item) => (item && item.getAttribute ? item.getAttribute("data-message-author-role") : null);
+  const _idMap = new WeakMap();
+  let _idSeq = 0;
+  function stableWeakId(item) {
+    if (!item || typeof item !== "object") return null;
+    let id = _idMap.get(item);
+    if (!id) { id = `zs-turn-${++_idSeq}`; _idMap.set(item, id); }
+    return id;
+  }
+
+  function role(item) {
+    if (!item) return null;
+    const direct = item.getAttribute && item.getAttribute("data-message-author-role");
+    if (direct) return direct;
+    const nestedRole = item.querySelector && item.querySelector("[data-message-author-role]");
+    if (nestedRole) return nestedRole.getAttribute("data-message-author-role");
+    const dtEl = (item.getAttribute && item.getAttribute("data-turn"))
+      ? item
+      : (item.querySelector && item.querySelector("[data-turn]"));
+    const dt = dtEl && dtEl.getAttribute && dtEl.getAttribute("data-turn");
+    if (dt === S.userRole || dt === S.assistantRole) return dt;
+    const ar = item.getAttribute && item.getAttribute("data-author-role");
+    if (ar === S.userRole || ar === S.assistantRole) return ar;
+    const tid = (item.getAttribute && item.getAttribute("data-testid")) || "";
+    if (tid === "user-message" || (item.querySelector && item.querySelector("[data-testid='user-message'], .user-message-bubble-color"))) {
+      return S.userRole;
+    }
+    if (tid === "assistant-message" || (item.querySelector && item.querySelector("[data-testid='assistant-message']"))) {
+      return S.assistantRole;
+    }
+    const sr = item.querySelector && item.querySelector("h5, h6, .sr-only");
+    const srTxt = sr ? (sr.textContent || "").trim() : "";
+    if (/^(?:you said|vous avez dit)\b/i.test(srTxt)) return S.userRole;
+    if (/^(?:chatgpt said|chatgpt a dit)\b/i.test(srTxt)) return S.assistantRole;
+    const cl = (item.className || "").toString();
+    if (/\b(?:justify-end|items-end|self-end)\b/.test(cl)) return S.userRole;
+    if (item.querySelector && item.querySelector(".markdown, .prose, [data-testid='copy-turn-action-button'], [data-testid='good-response-turn-action-button']")) {
+      return S.assistantRole;
+    }
+    const tm = tid.match(/^conversation-turn-(\d+)$/);
+    if (tm) return Number(tm[1]) % 2 === 1 ? S.userRole : S.assistantRole;
+    return null;
+  }
   const isUserItem = (item) => role(item) === S.userRole;
   const isAssistantItem = (item) => role(item) === S.assistantRole;
 
@@ -202,26 +243,64 @@ const ZSProvider = (() => {
   // Non-reasoning reply text only: join the .markdown container(s). Reasoning
   // renders outside .markdown, so this never sees tool blocks the model merely
   // drafts while thinking.
+  function replyContainers(item) {
+    if (!item || !item.querySelectorAll) return { nodes: [], fallback: false };
+    const exact = [...item.querySelectorAll(S.reply)];
+    if (exact.length) return { nodes: exact, fallback: false };
+    try {
+      const altAll = [...item.querySelectorAll('[class*="markdown"], .prose, [data-testid*="assistant-message"]')].filter(
+        (el) => !(el.closest && (el.closest(".zs-chip") || el.closest('[class*="thought"], [class*="thinking"]')))
+      );
+      const alt = altAll.filter((el) => !altAll.some((other) => other !== el && other.contains(el)));
+      if (alt.length) return { nodes: alt, fallback: false };
+    } catch {}
+    return { nodes: [item], fallback: true };
+  }
+
   function itemText(item) {
     if (!item) return "";
     if (isAssistantItem(item)) {
       // textWithout, never textContent - see the CodeMirror note there.
-      return [...item.querySelectorAll(S.reply)].map((m) => textWithout(m)).join("\n");
+      const { nodes, fallback } = replyContainers(item);
+      const excl = fallback ? 'button, [role="toolbar"], .sr-only' : undefined;
+      return nodes.map((m) => textWithout(m, excl)).join("\n");
     }
     return textWithout(item);
   }
 
   function classifyText(item, excludeSel) {
     if (isAssistantItem(item)) {
-      return [...item.querySelectorAll(S.reply)]
-        .filter((m) => !(excludeSel && m.closest(excludeSel)))
-        .map((m) => textWithout(m, excludeSel)).join("\n");
+      const { nodes, fallback } = replyContainers(item);
+      const excl = fallback
+        ? (excludeSel ? `${excludeSel}, button, [role="toolbar"], .sr-only` : 'button, [role="toolbar"], .sr-only')
+        : excludeSel;
+      return nodes
+        .filter((m) => !(excludeSel && m.closest && m.closest(excludeSel)))
+        .map((m) => textWithout(m, excl)).join("\n");
     }
     return textWithout(item, excludeSel);
   }
 
   // ── DOM primitives ────────────────────────────────────────────────────────
-  const allItems = () => [...document.querySelectorAll(S.msg)];
+  const ITEM_TIERS = [
+    () => [...document.querySelectorAll(S.msg)],
+    () => [...document.querySelectorAll('[data-turn="user"], [data-turn="assistant"]')],
+    () => [...document.querySelectorAll('[data-author-role="user"], [data-author-role="assistant"]')],
+    () => [...document.querySelectorAll('article[data-testid^="conversation-turn-"], [data-testid^="conversation-turn-"]')],
+    () => [...document.querySelectorAll('[data-testid="user-message"], [data-testid="assistant-message"]')],
+    () => [...document.querySelectorAll("main article")].filter((el) =>
+      ((el.textContent || "").trim().length > 0) || !!(el.querySelector && el.querySelector("pre, .markdown, .prose"))
+    ),
+  ];
+  function allItems() {
+    for (const getTier of ITEM_TIERS) {
+      try {
+        const els = getTier().filter((el) => !(el.closest && el.closest("#zs-root")));
+        if (els.length) return els;
+      } catch {}
+    }
+    return [];
+  }
   const assistantItems = () => allItems().filter(isAssistantItem);
   const assistantCount = () => assistantItems().length;
   const userCount = () => allItems().filter(isUserItem).length;
@@ -286,8 +365,17 @@ const ZSProvider = (() => {
   // a monotonic number, so the core's numeric "old id" shortcut simply doesn't
   // apply here (Number(uuid) is NaN and that guard is skipped) - the
   // settled-history guard covers the same case provider-agnostically.
-  const itemKey = (item) =>
-    (item && item.getAttribute ? item.getAttribute("data-message-id") : null) || null;
+  const itemKey = (item) => {
+    if (!item || !item.getAttribute) return null;
+    const direct = item.getAttribute("data-message-id");
+    if (direct) return direct;
+    const nested = item.querySelector && item.querySelector("[data-message-id]");
+    if (nested) {
+      const mid = nested.getAttribute("data-message-id");
+      if (mid) return mid;
+    }
+    return item.getAttribute("data-turn-id") || item.getAttribute("data-testid") || stableWeakId(item);
+  };
   const lastAssistantId = () => itemKey(lastAssistant());
 
   const chatIsEmpty = () => allItems().length === 0;
@@ -408,10 +496,13 @@ const ZSProvider = (() => {
   // sendButton() cheerfully returns the stop square and every guarded click is
   // refused. That is exactly what stranded a tool result in the composer and
   // raised "ChatGPT did not accept the injected message after 4 attempts".
-  const isStopBtn = (b) => !!b && (
-    b.getAttribute("data-testid") === "stop-button" ||
-    /^(?:stop\b|interrompre\b)/i.test((b.getAttribute("aria-label") || "").trim())
-  );
+  const isStopBtn = (b) => {
+    if (!b) return false;
+    const tid = (b.getAttribute && b.getAttribute("data-testid")) || "";
+    if (tid === "stop-button" || /stop/i.test(tid)) return true;
+    const aria = ((b.getAttribute && b.getAttribute("aria-label")) || "").trim();
+    return /^(?:stop|interrompre|cancel|abort)\b/i.test(aria);
+  };
   const submitButton = () => {
     for (const b of document.querySelectorAll(S.submitBtn)) {
       if (b.offsetParent !== null) return b;
@@ -973,7 +1064,7 @@ const ZSProvider = (() => {
   const CMD_CLOSE = /###\s*end[_\- ]?(?:lua|mcp_tool)\s*###/i;
 
   function findToolBlockSpot(item /*, chip */) {
-    const replies = [...item.querySelectorAll(S.reply)];
+    const { nodes: replies } = replyContainers(item);
     let hidAny = null;
     const hide = (el, mc) => {
       el.classList.add("zs-tool-hide");
@@ -983,12 +1074,22 @@ const ZSProvider = (() => {
     for (const mc of replies) {
       // 1. Fenced code blocks carrying a command.
       mc.querySelectorAll(S.codeWrap).forEach((pre) => {
-        if (pre.closest(".zs-chip")) return;
+        if (pre.closest && pre.closest(".zs-chip")) return;
         const tapped = pre.querySelectorAll
           ? [...pre.querySelectorAll(".cm-content[data-zs-cm]")].some((cm) => CMD_SHAPE.test(cm.getAttribute("data-zs-cm") || ""))
           : false;
         if (tapped || CMD_SHAPE.test(pre.textContent || "")) hide(pre, mc);
       });
+      // 1b. Non-<pre> CodeMirror / code-block wrappers (e.g. redesigned </> JSON cards).
+      try {
+        mc.querySelectorAll('.cm-editor, [class*="code-block"]').forEach((cb) => {
+          if (cb.closest && (cb.closest(".zs-chip") || cb.closest(S.codeWrap) || cb.closest(".zs-tool-hide"))) return;
+          const tapped = cb.querySelectorAll
+            ? [...cb.querySelectorAll(".cm-content[data-zs-cm]")].some((cm) => CMD_SHAPE.test(cm.getAttribute("data-zs-cm") || ""))
+            : false;
+          if (tapped || CMD_SHAPE.test(cb.textContent || "")) hide(cb, mc);
+        });
+      } catch {}
       // 2. Bare top-level blocks with an inline command (no <pre> inside).
       const kids = [...mc.children];
       kids.forEach((el) => {
@@ -1073,7 +1174,7 @@ const ZSProvider = (() => {
       if (d) diag = d;
       // Version beacon: stamp the loaded build onto <html> so a reload can be
       // confirmed from the page (read document.documentElement.dataset.zsGptVer).
-      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-22_v1.7.2"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
