@@ -6,17 +6,24 @@ const ZSProvider = (() => {
   "use strict";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let diag = () => {};
+  let _locked = false, _lockedEl = null;
 
   const S = {
     userMsg: '[data-testid="user-message"]',
     asstBody: '.font-claude-response, .font-claude-message, [data-is-streaming] .standard-markdown, [data-test-render-count] .font-claude-response-body',
     thinking: '[data-testid*="thinking"], [class*="thinking"], details[class*="thought"]',
     editorSels: [
-      'div.ProseMirror[contenteditable="true"]',
-      '[data-testid="chat-input"][contenteditable="true"]',
-      '[contenteditable="true"][role="textbox"]',
-      'fieldset textarea',
-      'form textarea',
+      'div.ProseMirror[contenteditable]:not([contenteditable="false"])',
+      '[data-testid="chat-input"][contenteditable]:not([contenteditable="false"])',
+      '[contenteditable][role="textbox"]:not([contenteditable="false"])',
+      'fieldset textarea:not([aria-hidden="true"])',
+      'form textarea:not([aria-hidden="true"])',
+    ],
+    editorFallbackSels: [
+      'form [contenteditable]:not([contenteditable="false"])',
+      'main [contenteditable]:not([contenteditable="false"])',
+      '[contenteditable]:not([contenteditable="false"])',
+      'textarea:not([aria-hidden="true"])',
     ],
     sendSels: [
       'button[aria-label="Send message"]',
@@ -50,11 +57,14 @@ const ZSProvider = (() => {
     RESPONSE_TIMEOUT_MS: 300000,
   };
 
-  function isVisibleBox(el) {
-    if (!el || el.closest("#zs-root")) return false;
+  function isVisibleBox(el, minW = 0, minH = 0) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
     if (!el.getBoundingClientRect) return true;
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
+    if (minW && r.width < minW) return false;
+    if (minH && r.height < minH) return false;
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden") return false;
@@ -63,9 +73,17 @@ const ZSProvider = (() => {
   }
 
   function getEditor() {
+    if (_locked && _lockedEl && _lockedEl.isConnected && isVisibleBox(_lockedEl)) return _lockedEl;
+    const locked = document.querySelector('[data-zs-locked="1"]');
+    if (locked && isVisibleBox(locked)) return locked;
     for (const sel of S.editorSels) {
       for (const el of document.querySelectorAll(sel)) {
         if (isVisibleBox(el)) return el;
+      }
+    }
+    for (const sel of S.editorFallbackSels) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisibleBox(el, 100, 16)) return el;
       }
     }
     return null;
@@ -181,40 +199,63 @@ const ZSProvider = (() => {
     return ed.closest("fieldset") || ed.closest("form") || ed.parentElement;
   }
 
+  function isAnchorCandidate(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (!el.getBoundingClientRect) return false;
+    const r = el.getBoundingClientRect();
+    const maxW = Math.min(window.innerWidth - 16, 1100);
+    return (
+      r.width >= 260 && r.width <= maxW &&
+      r.height >= 40 && r.height <= 320 &&
+      r.top >= 4 && r.bottom <= window.innerHeight + 20
+    );
+  }
+
   function barAnchor() {
     const ed = getEditor();
     if (!ed) return null;
-    let n = ed.closest("fieldset") || ed.parentElement;
-    for (let i = 0; i < 8 && n; i++) {
+    let n = ed.parentElement;
+    for (let i = 0; i < 8 && n && n !== document.body && n.tagName !== "MAIN"; i++) {
       if (n.closest && n.closest("#zs-root")) break;
       const cl = [...(n.classList || [])];
-      if (cl.some((c) => c.startsWith("rounded") || c.includes("composer"))) {
-        const r = n.getBoundingClientRect();
-        if (r.width >= 260 && r.height >= 36) return n;
+      if (cl.some((c) => c.startsWith("rounded") || c.includes("composer")) && isAnchorCandidate(n)) {
+        return n;
       }
       n = n.parentElement;
     }
     const f = composerFrame();
-    if (f && f.getBoundingClientRect) {
-      const r = f.getBoundingClientRect();
-      if (r.width >= 260) return f;
-    }
+    if (f && isAnchorCandidate(f)) return f;
     return null;
   }
 
-  let _locked = false;
   function setInputLock(on) {
     _locked = on;
     const ed = getEditor();
-    if (!ed) return;
-    if (ed.tagName === "TEXTAREA") {
-      if (on) ed.setAttribute("readonly", "");
-      else ed.removeAttribute("readonly");
-    } else {
-      ed.setAttribute("contenteditable", on ? "false" : "true");
+    if (on) {
+      if (!ed) return;
+      _lockedEl = ed;
+      if (ed.tagName === "TEXTAREA") {
+        ed.setAttribute("readonly", "");
+      } else {
+        if (!ed.dataset.zsPrevCe) ed.dataset.zsPrevCe = ed.getAttribute("contenteditable") || "true";
+        ed.setAttribute("contenteditable", "false");
+      }
+      ed.setAttribute("data-zs-locked", "1");
+      return;
     }
-    if (on) ed.setAttribute("data-zs-locked", "1");
-    else ed.removeAttribute("data-zs-locked");
+    const targets = [];
+    if (ed) targets.push(ed);
+    if (_lockedEl && _lockedEl !== ed && _lockedEl.isConnected) targets.push(_lockedEl);
+    _lockedEl = null;
+    for (const t of targets) {
+      if (t.tagName === "TEXTAREA") {
+        t.removeAttribute("readonly");
+      } else {
+        t.setAttribute("contenteditable", t.dataset.zsPrevCe || "true");
+        delete t.dataset.zsPrevCe;
+      }
+      t.removeAttribute("data-zs-locked");
+    }
   }
 
   function firstVisible(sels) {
@@ -358,7 +399,7 @@ const ZSProvider = (() => {
     const relock = _locked;
     if (relock) {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
-      else ed.setAttribute("contenteditable", "true");
+      else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
     try {
       if (editorText() !== text) await setEditorText(ed, text);
@@ -383,8 +424,13 @@ const ZSProvider = (() => {
 
   function enforceComposer() { return { ready: true }; }
   async function ensureComposerReady(reason) {
-    diag("mode_ready", { reason, provider: "claude" });
-    return { ready: !!getEditor() };
+    if (!getEditor()) await waitFor(() => !!getEditor(), 1500);
+    const ed = getEditor();
+    diag("mode_ready", { reason, provider: "claude", hasEditor: !!ed });
+    return {
+      ready: !!ed,
+      detail: ed ? "" : "Claude input box not found on this page. Reload the page and try again.",
+    };
   }
 
   function scanError() {

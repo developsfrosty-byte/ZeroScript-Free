@@ -292,7 +292,11 @@ const ZSProvider = (() => {
   // "instant" - it is DeepSeek's default model, so the attribute never carries
   // the label shown on the tab.
   const findInstantRadio = () => findModeRadio("default", RE.instantMode);
-  const radioOn = (r) => !!r && r.getAttribute("aria-checked") === "true";
+  const radioOn = (r) => !!r && (
+    r.getAttribute("aria-checked") === "true" ||
+    r.getAttribute("data-state") === "checked" ||
+    r.getAttribute("aria-selected") === "true"
+  );
 
   // The user can CHOOSE the Vision tab; when they do we respect it (never force
   // Expert over it) and enable image tools - see supportsVision (getter) and
@@ -433,8 +437,18 @@ const ZSProvider = (() => {
     // Unified model (2026-09): no model tabs exist, so there is nothing to pick -
     // ready once Search is off.
     const unified = !state.expertFound && !state.visionFound && !state.instantFound;
-    diag("mode_ready", { reason, unified, ...state });
-    return { ...state, unified, ready: state.expertOn || state.visionOn || state.instantOn || (unified && state.searchOff) };
+    const hasEd = !!getEditor();
+    const ok = state.expertOn || state.visionOn || state.instantOn || (unified && state.searchOff);
+    diag("mode_ready", { reason, unified, hasEd, ...state });
+    if (ok && hasEd) return { ...state, unified, ready: true };
+    if (hasEd && state.searchOff) {
+      diag("mode_fallback_allow", state);
+      return { ...state, unified, ready: true };
+    }
+    const detail = !state.searchOff
+      ? "Could not turn off Search mode in DeepSeek. Toggle Search off and try again."
+      : "DeepSeek input box not found on this page. Reload the page and try again.";
+    return { ...state, unified, ready: false, detail };
   }
 
   // DeepSeek's footer button doubles as SEND (an upward arrow) and STOP (a

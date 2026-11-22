@@ -107,7 +107,7 @@
     { name: "ChatGPT", url: "https://chatgpt.com/" },
     { name: "Gemini", url: "https://gemini.google.com/app" },
     { name: "Grok", url: "https://grok.com/" },
-    { name: "Mistral", url: "https://chat.mistral.ai/chat" },
+    { name: "Mistral", url: "https://chat.mistral.ai/" },
     { name: "Kimi", url: "https://www.kimi.ai/" },
     { name: "GLM", url: "https://chat.z.ai/" },
     { name: "Qwen", url: "https://chat.qwen.ai/" },
@@ -1898,8 +1898,6 @@
     A.toolCallsSinceReminder = 0; // fresh reminder cadence for the new session
     ui.setStarting(true);
     ui.updateStartGate(); // refresh the bar into its "starting" state
-    P.setInputLock(true); // block user input during bootstrap
-    ui.inputCover(true);  // cover the composer ("Working…") for the WHOLE Starting Up
     try {
       await ensureTools(true); // boot: always take a fresh catalogue (the TTL then
                                // covers the list_commands / list_mcp_servers calls
@@ -1912,11 +1910,15 @@
       }
       const modeState = await P.ensureComposerReady("startup");
       if (!alive()) return;
-      if (!modeState.ready) {
+      if (!modeState || !modeState.ready) {
+        diag("start.modeNotReady", { provider: P.id, ...(modeState || {}) });
         ui.banner("warn", `${P.displayName} mode not ready`,
+          (modeState && modeState.detail) ||
           `Could not switch ${P.displayName} to the required mode. Start a new chat or reload the page, then try again.`);
         return;
       }
+      P.setInputLock(true); // block user input during bootstrap (after readiness check!)
+      ui.inputCover(true);  // cover the composer ("Working…") for the WHOLE Starting Up
       const prompt = systemPrompt();
       const base = await submitAndGetBase(prompt);
       if (!alive()) return;
@@ -3447,6 +3449,7 @@
     // borrowing to seat the bar (see the anchored branch below). Cleared when we
     // leave anchored mode so the site's composer returns to its normal layout.
     let anchorPadEl = null;
+    let noEditorSince = 0, noEditorLogged = false;
     function clearAnchorPad() {
       if (anchorPadEl) { try { anchorPadEl.style.paddingTop = ""; } catch {} anchorPadEl = null; }
     }
@@ -3506,6 +3509,7 @@
       // Preferred: in-flow mount inside the composer (no overlap, full width).
       const mount = computeBarMount();
       if (mount) {
+        noEditorSince = 0; noEditorLogged = false;
         clearAnchorPad();
         if (bar.parentElement !== mount.parent || bar.nextElementSibling !== mount.before) {
           try { mount.parent.insertBefore(bar, mount.before || null); } catch {}
@@ -3539,26 +3543,28 @@
       // a child of the framework's DOM. barAnchor() returns the element to hug.
       const anchorEl = (P.barAnchor && P.barAnchor()) || null;
       if (anchorEl && anchorEl.isConnected) {
-        bar.classList.remove("zs-bar-inline", "zs-bar-inside");
-        bar.classList.add("zs-bar-anchored");
-        if (root && bar.parentElement !== root) root.appendChild(bar);
         const r = anchorEl.getBoundingClientRect();
-        if (!r.width) { bar.style.display = "none"; clearAnchorPad(); if (menuEl) menuEl.hidden = true; return; }
-        bar.style.display = "flex";
-        const bh = bar.offsetHeight || 34;
-        if (anchorPadEl && anchorPadEl !== anchorEl) clearAnchorPad();
-        anchorPadEl = anchorEl;
-        anchorEl.style.paddingTop = (bh + 6) + "px"; // reserve the strip the bar sits in (+gap)
-        bar.style.left = Math.round(r.left) + "px";
-        bar.style.top = Math.round(r.top) + "px";
-        bar.style.width = Math.round(r.width) + "px";
-        if (menuEl && !menuEl.hidden) {
-          bar.classList.remove("zs-bar-inline"); // ensure fixed geometry for menu math
-          menuEl.style.right = Math.round(window.innerWidth - (r.left + r.width)) + "px";
-          menuEl.style.bottom = Math.round(window.innerHeight - r.top + 6) + "px";
-          menuEl.style.maxHeight = Math.max(140, Math.round(r.top - 16)) + "px";
+        if (r.width >= 180 && r.height >= 24 && r.top >= 0 && r.top < window.innerHeight - 20) {
+          noEditorSince = 0; noEditorLogged = false;
+          bar.classList.remove("zs-bar-inline", "zs-bar-inside");
+          bar.classList.add("zs-bar-anchored");
+          if (root && bar.parentElement !== root) root.appendChild(bar);
+          bar.style.display = "flex";
+          const bh = bar.offsetHeight || 34;
+          if (anchorPadEl && anchorPadEl !== anchorEl) clearAnchorPad();
+          anchorPadEl = anchorEl;
+          anchorEl.style.paddingTop = (bh + 6) + "px"; // reserve the strip the bar sits in (+gap)
+          bar.style.left = Math.round(r.left) + "px";
+          bar.style.top = Math.round(r.top) + "px";
+          bar.style.width = Math.round(r.width) + "px";
+          if (menuEl && !menuEl.hidden) {
+            bar.classList.remove("zs-bar-inline"); // ensure fixed geometry for menu math
+            menuEl.style.right = Math.round(window.innerWidth - (r.left + r.width)) + "px";
+            menuEl.style.bottom = Math.round(window.innerHeight - r.top + 6) + "px";
+            menuEl.style.maxHeight = Math.max(140, Math.round(r.top - 16)) + "px";
+          }
+          return;
         }
-        return;
       }
       bar.classList.remove("zs-bar-anchored");
       clearAnchorPad();
@@ -3570,14 +3576,22 @@
         if (root && bar.parentElement !== root) root.appendChild(bar);
       }
       const f = (P.getEditor && P.getEditor()) || (P.composerFrame && P.composerFrame());
-      if (!f) { bar.style.display = "none"; if (menuEl) menuEl.hidden = true; return; }
+      if (!f) {
+        if (!noEditorSince) noEditorSince = Date.now();
+        else if (!noEditorLogged && Date.now() - noEditorSince > 3000) {
+          noEditorLogged = true;
+          diag("bar.noEditor", { provider: P.id, path: location.pathname });
+        }
+        bar.style.display = "none"; if (menuEl) menuEl.hidden = true; return;
+      }
+      noEditorSince = 0; noEditorLogged = false;
       bar.style.display = "flex";
       const r = f.getBoundingClientRect();
       if (!r.width) { bar.style.display = "none"; return; }
       const w = Math.min(r.width, BAR_MAX_W);
-      const left = Math.round(r.left + (r.width - w) / 2);
+      const left = Math.max(4, Math.min(window.innerWidth - w - 4, Math.round(r.left + (r.width - w) / 2)));
       const bh = bar.offsetHeight || 40;
-      const top = Math.max(4, Math.round(r.top - bh - BAR_GAP));
+      const top = Math.max(4, Math.min(window.innerHeight - bh - 4, Math.round(r.top - bh - BAR_GAP)));
       bar.style.width = w + "px";
       bar.style.left = left + "px";
       bar.style.top = top + "px";

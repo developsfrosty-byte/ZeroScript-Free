@@ -6,22 +6,33 @@ const ZSProvider = (() => {
   "use strict";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let diag = () => {};
+  let _locked = false, _lockedEl = null;
 
   const S = {
     roleMsg: '[data-message-author-role]',
     asstPart: '[data-testid="text-message-part"], .prose, .markdown',
     thinking: '[data-testid*="thinking"], [class*="thinking"], [class*="thought"]',
     editorSels: [
-      'div.ProseMirror[contenteditable="true"]',
-      '[contenteditable="true"][role="textbox"]',
+      'div.ProseMirror[contenteditable]:not([contenteditable="false"])',
+      'div.tiptap[contenteditable]:not([contenteditable="false"])',
+      '[data-lexical-editor="true"]',
+      '[contenteditable][role="textbox"]:not([contenteditable="false"])',
       'textarea[name="message.text"]',
-      'form textarea',
-      'textarea',
+      'form textarea:not([aria-hidden="true"])',
+    ],
+    editorFallbackSels: [
+      'form [contenteditable]:not([contenteditable="false"])',
+      'main [contenteditable]:not([contenteditable="false"])',
+      '[contenteditable]:not([contenteditable="false"])',
+      'textarea:not([aria-hidden="true"])',
     ],
     sendSels: [
       'button[type="submit"]',
       'button[aria-label*="Send" i]',
       'button[aria-label*="Envoyer" i]',
+      'button[aria-label*="Submit" i]',
+      'button[data-testid*="send" i]',
+      'button[data-testid*="submit" i]',
     ],
     stopSels: [
       'button[aria-label*="Stop" i]',
@@ -47,25 +58,61 @@ const ZSProvider = (() => {
     RESPONSE_TIMEOUT_MS: 300000,
   };
 
-  function isVisibleBox(el) {
-    if (!el || el.closest("#zs-root")) return false;
+  function isVisibleBox(el, minW = 0, minH = 0) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
     if (!el.getBoundingClientRect) return true;
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
+    if (minW && r.width < minW) return false;
+    if (minH && r.height < minH) return false;
     try {
       const st = getComputedStyle(el);
-      if (st.display === "none" || st.visibility === "hidden") return false;
+      if (st.display === "none" || st.visibility === "hidden" || st.opacity === "0") return false;
     } catch {}
     return true;
   }
 
+  function findInShadowRoots(root, minW, minH) {
+    if (!root || !root.querySelectorAll) return null;
+    const stack = [root];
+    let visited = 0;
+    while (stack.length && visited < 60) {
+      const cur = stack.pop();
+      visited++;
+      if (!cur || !cur.querySelectorAll) continue;
+      if (cur !== root) {
+        for (const sel of S.editorSels) {
+          for (const el of cur.querySelectorAll(sel)) {
+            if (isVisibleBox(el)) return el;
+          }
+        }
+        for (const el of cur.querySelectorAll('[contenteditable]:not([contenteditable="false"]), textarea:not([aria-hidden="true"])')) {
+          if (isVisibleBox(el, minW, minH)) return el;
+        }
+      }
+      for (const el of cur.querySelectorAll("*")) {
+        if (el.shadowRoot && !(el.closest && el.closest("#zs-root"))) stack.push(el.shadowRoot);
+      }
+    }
+    return null;
+  }
+
   function getEditor() {
+    if (_locked && _lockedEl && _lockedEl.isConnected && isVisibleBox(_lockedEl)) return _lockedEl;
+    const locked = document.querySelector('[data-zs-locked="1"]');
+    if (locked && isVisibleBox(locked)) return locked;
     for (const sel of S.editorSels) {
       for (const el of document.querySelectorAll(sel)) {
         if (isVisibleBox(el)) return el;
       }
     }
-    return null;
+    for (const sel of S.editorFallbackSels) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisibleBox(el, 100, 16)) return el;
+      }
+    }
+    return findInShadowRoots(document.querySelector("main") || document.body, 100, 16);
   }
 
   const editorText = () => {
@@ -77,6 +124,8 @@ const ZSProvider = (() => {
   function allItems() {
     const roleNodes = [...document.querySelectorAll(S.roleMsg)].filter((el) => !el.closest("#zs-root"));
     if (roleNodes.length) return roleNodes;
+    const dataRoleNodes = [...document.querySelectorAll('[data-role="user"], [data-role="assistant"]')].filter((el) => !el.closest("#zs-root"));
+    if (dataRoleNodes.length) return dataRoleNodes;
     const seen = new Set();
     const out = [];
     for (const part of document.querySelectorAll('[data-testid="text-message-part"]')) {
@@ -84,6 +133,12 @@ const ZSProvider = (() => {
       const host = part.closest('[data-testid*="message"]') || part.parentElement;
       if (host && !seen.has(host)) { seen.add(host); out.push(host); }
     }
+    if (out.length) return out;
+    for (const msg of document.querySelectorAll('[data-testid*="user-message"], [data-testid*="assistant-message"]')) {
+      if (msg.closest("#zs-root")) continue;
+      if (!seen.has(msg)) { seen.add(msg); out.push(msg); }
+    }
+    out.sort((a, b) => (a === b ? 0 : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)));
     return out;
   }
 
@@ -91,6 +146,10 @@ const ZSProvider = (() => {
     if (!item) return false;
     const role = item.getAttribute && item.getAttribute("data-message-author-role");
     if (role) return role === "user";
+    const dr = item.getAttribute && item.getAttribute("data-role");
+    if (dr) return dr === "user";
+    const tid = ((item.getAttribute && item.getAttribute("data-testid")) || "").toLowerCase();
+    if (tid.includes("user")) return true;
     const cl = (item.className || "").toString();
     return /\bjustify-end\b|\bself-end\b|\bitems-end\b/.test(cl);
   }
@@ -155,55 +214,104 @@ const ZSProvider = (() => {
   }
 
   const chatIsEmpty = () => allItems().length === 0;
-  const isFreshChat = () => chatIsEmpty() && !/\/chat\/[^/]+/.test(location.pathname) && !!getEditor();
+  const isFreshChat = () => chatIsEmpty() && !/\/(?:chat|work|code)\/[^/]+/.test(location.pathname) && !!getEditor();
 
   function composerFrame() {
     const ed = getEditor();
     return ed ? (ed.closest("form") || ed.parentElement) : null;
   }
 
+  function isAnchorCandidate(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (!el.getBoundingClientRect) return false;
+    const r = el.getBoundingClientRect();
+    const maxW = Math.min(window.innerWidth - 16, 1100);
+    if (r.width < 260 || r.width > maxW || r.height < 44 || r.height > 320) return false;
+    if (r.top < 4 || r.bottom > window.innerHeight + 20) return false;
+    try {
+      const st = getComputedStyle(el);
+      if (st.display.includes("flex") && st.flexDirection === "row" && r.height < 64) return false;
+    } catch {}
+    return true;
+  }
+
   function barAnchor() {
     const ed = getEditor();
     if (!ed) return null;
-    let n = ed.closest("form") || ed.parentElement;
-    for (let i = 0; i < 6 && n; i++) {
+    let n = ed.parentElement;
+    for (let i = 0; i < 8 && n && n !== document.body && n.tagName !== "MAIN"; i++) {
       if (n.closest && n.closest("#zs-root")) break;
       const cl = [...(n.classList || [])];
-      if (cl.some((c) => c.startsWith("rounded"))) {
-        const r = n.getBoundingClientRect();
-        if (r.width >= 260 && r.height >= 36) return n;
-      }
+      if (cl.some((c) => c.startsWith("rounded")) && isAnchorCandidate(n)) return n;
       n = n.parentElement;
     }
     const f = composerFrame();
-    if (f && f.getBoundingClientRect && f.getBoundingClientRect().width >= 260) return f;
+    if (isAnchorCandidate(f)) return f;
     return null;
   }
 
-  let _locked = false;
   function setInputLock(on) {
     _locked = on;
     const ed = getEditor();
-    if (!ed) return;
-    if (ed.tagName === "TEXTAREA") {
-      if (on) ed.setAttribute("readonly", "");
-      else ed.removeAttribute("readonly");
-    } else {
-      ed.setAttribute("contenteditable", on ? "false" : "true");
+    if (on) {
+      if (!ed) return;
+      _lockedEl = ed;
+      if (ed.tagName === "TEXTAREA") {
+        ed.setAttribute("readonly", "");
+      } else {
+        if (!ed.dataset.zsPrevCe) ed.dataset.zsPrevCe = ed.getAttribute("contenteditable") || "true";
+        ed.setAttribute("contenteditable", "false");
+      }
+      ed.setAttribute("data-zs-locked", "1");
+      return;
     }
-    if (on) ed.setAttribute("data-zs-locked", "1");
-    else ed.removeAttribute("data-zs-locked");
+    const targets = [];
+    if (ed) targets.push(ed);
+    if (_lockedEl && _lockedEl !== ed && _lockedEl.isConnected) targets.push(_lockedEl);
+    _lockedEl = null;
+    for (const t of targets) {
+      if (t.tagName === "TEXTAREA") {
+        t.removeAttribute("readonly");
+      } else {
+        t.setAttribute("contenteditable", t.dataset.zsPrevCe || "true");
+        delete t.dataset.zsPrevCe;
+      }
+      t.removeAttribute("data-zs-locked");
+    }
   }
 
-  function firstVisible(sels) {
+  function firstVisible(sels, excludeSels) {
     for (const sel of sels) {
       for (const b of document.querySelectorAll(sel)) {
+        if (excludeSels && excludeSels.some((ex) => b.matches(ex))) continue;
         if (isVisibleBox(b)) return b;
       }
     }
     return null;
   }
-  const sendButton = () => firstVisible(S.sendSels);
+  const NON_SEND_BTN_RE = /stop|arr[êe]t|mic|voice|audio|dictat|attach|upload|file|image|add|plus|fast|model|mode|menu|close|dismiss|set up|knowledge/i;
+  function sendButton() {
+    const direct = firstVisible(S.sendSels, S.stopSels);
+    if (direct) return direct;
+    const ed = getEditor();
+    const scope = barAnchor() || composerFrame() || (ed && ed.parentElement);
+    if (!scope || !scope.querySelectorAll) return null;
+    let best = null;
+    let bestRight = -Infinity;
+    for (const b of scope.querySelectorAll("button")) {
+      if (!isVisibleBox(b) || !b.querySelector("svg")) continue;
+      if (S.stopSels.some((sel) => b.matches(sel))) continue;
+      const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`.trim();
+      if (NON_SEND_BTN_RE.test(sig)) continue;
+      const r = b.getBoundingClientRect ? b.getBoundingClientRect() : null;
+      const right = r ? r.right : 0;
+      if (right >= bestRight) {
+        bestRight = right;
+        best = b;
+      }
+    }
+    return best;
+  }
   const stopButton = () => firstVisible(S.stopSels);
 
   function streamText(item) { return item ? textWithout(item, ".zs-chip") : ""; }
@@ -324,7 +432,7 @@ const ZSProvider = (() => {
     const relock = _locked;
     if (relock) {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
-      else ed.setAttribute("contenteditable", "true");
+      else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
     try {
       if (editorText() !== text) await setEditorText(ed, text);
@@ -349,8 +457,13 @@ const ZSProvider = (() => {
 
   function enforceComposer() { return { ready: true }; }
   async function ensureComposerReady(reason) {
-    diag("mode_ready", { reason, provider: "mistral" });
-    return { ready: !!getEditor() };
+    if (!getEditor()) await waitFor(() => !!getEditor(), 1500);
+    const ed = getEditor();
+    diag("mode_ready", { reason, provider: "mistral", hasEditor: !!ed });
+    return {
+      ready: !!ed,
+      detail: ed ? "" : "Mistral input box not found on this page. Reload the page and try again.",
+    };
   }
 
   function scanError() {
@@ -395,17 +508,26 @@ const ZSProvider = (() => {
   }
 
   async function openNewChat() {
-    const a = document.querySelector('a[href="/chat"], button[aria-label*="New chat" i]');
+    let a = firstVisible(['a[href="/chat"]', 'a[href="/work"]', 'a[href="/code"]', 'button[aria-label*="New chat" i]']);
+    if (!a) {
+      for (const el of document.querySelectorAll("a, button")) {
+        if (!isVisibleBox(el)) continue;
+        if (/^\+?\s*new\s+chat$/i.test((el.textContent || "").trim())) { a = el; break; }
+      }
+    }
     if (a) {
       try { a.click(); } catch {}
       await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
       return true;
     }
-    location.assign("https://chat.mistral.ai/chat");
+    const target = /^\/(?:work|code)\b/.test(location.pathname)
+      ? `https://chat.mistral.ai/${location.pathname.split("/")[1]}`
+      : "https://chat.mistral.ai/";
+    location.assign(target);
     return true;
   }
 
-  const conversationKey = () => (/\/chat\/[^/]+/.test(location.pathname) ? location.pathname : "");
+  const conversationKey = () => (/\/(?:chat|work|code)\/[^/]+/.test(location.pathname) ? location.pathname : "");
 
   const PROMPT_EXTRA = `- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: the ZeroScript browser extension is live in this tab for the entire session. Always emit a fenced ZeroScript command block directly (multi_edit or ###LUA### ... ###END_LUA###) instead of asking the user to paste code into Roblox Studio.`;
 
@@ -431,7 +553,7 @@ const ZSProvider = (() => {
       const b = e.target && e.target.closest && e.target.closest("button");
       if (!b) return;
       if (S.stopSels.some((sel) => b.matches(sel))) { handlers.onNativeStop(); return; }
-      if (!S.sendSels.some((sel) => b.matches(sel))) return;
+      if (b !== sendButton() && !S.sendSels.some((sel) => b.matches(sel))) return;
       if (b.disabled) return;
       if (handlers.isBlocked()) return;
       if (!handlers.isStarted()) {
@@ -478,7 +600,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-mistral-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-mistral-ver", "2026-11-22_v1.7.1-vibe"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,

@@ -29,6 +29,7 @@ const ZSProvider = (() => {
   "use strict";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let diag = () => {}; // injected by core via init()
+  let _locked = false, _lockedEl = null;
   // Identity of the last image set we STAGED into the composer. The core reuses
   // the same array reference across submitAndGetBase's up-to-4 typeAndSend
   // retries, so keying on it makes the attach idempotent (see typeAndSend) - a
@@ -228,13 +229,15 @@ const ZSProvider = (() => {
   // textareas are recaptcha/aria-hidden). Scope away ZeroScript's own settings
   // textarea (#zs-root) so the send hooks' "not on a chat page" guard holds on
   // login/OAuth pages that have no site composer.
-  function isVisibleEditor(el) {
+  function isVisibleEditor(el, minW = 0, minH = 0) {
     if (!el || (el.closest && el.closest("#zs-root"))) return false;
     if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
     if (el.classList && el.classList.contains("g-recaptcha-response")) return false;
     if (!el.getBoundingClientRect) return true;
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
+    if (minW && r.width < minW) return false;
+    if (minH && r.height < minH) return false;
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden") return false;
@@ -242,17 +245,29 @@ const ZSProvider = (() => {
     return true;
   }
   const EDITOR_SELS = [
-    "form textarea",
-    'textarea[placeholder]',
+    "form textarea:not([aria-hidden=\"true\"]):not(.g-recaptcha-response)",
+    'textarea[placeholder]:not([aria-hidden="true"]):not(.g-recaptcha-response)',
     'textarea:not([aria-hidden="true"]):not(.g-recaptcha-response)',
-    'div.ProseMirror[contenteditable="true"]',
-    'div.tiptap[contenteditable="true"]',
-    '[contenteditable="true"][role="textbox"]',
+    'div.ProseMirror[contenteditable]:not([contenteditable="false"])',
+    'div.tiptap[contenteditable]:not([contenteditable="false"])',
+    '[contenteditable][role="textbox"]:not([contenteditable="false"])',
+  ];
+  const EDITOR_FALLBACK_SELS = [
+    'main [contenteditable]:not([contenteditable="false"])',
+    '[contenteditable]:not([contenteditable="false"])',
   ];
   const getEditor = () => {
+    if (_locked && _lockedEl && _lockedEl.isConnected && isVisibleEditor(_lockedEl)) return _lockedEl;
+    const locked = document.querySelector('[data-zs-locked="1"]');
+    if (locked && isVisibleEditor(locked)) return locked;
     for (const sel of EDITOR_SELS) {
       for (const e of document.querySelectorAll(sel)) {
         if (isVisibleEditor(e)) return e;
+      }
+    }
+    for (const sel of EDITOR_FALLBACK_SELS) {
+      for (const e of document.querySelectorAll(sel)) {
+        if (isVisibleEditor(e, 100, 16)) return e;
       }
     }
     return null;
@@ -300,44 +315,62 @@ const ZSProvider = (() => {
   // insert #zs-bar into it. barAnchor() returns the wide rounded composer CARD
   // (requiring >= 260x36 so tiny rounded icon buttons are skipped); the core
   // keeps the bar in #zs-root, hugs the card's top edge, or floats if null.
+  function isAnchorCandidate(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (!el.getBoundingClientRect) return false;
+    const r = el.getBoundingClientRect();
+    const maxW = Math.min(window.innerWidth - 16, 1100);
+    return (
+      r.width >= 260 && r.width <= maxW &&
+      r.height >= 36 && r.height <= 320 &&
+      r.top >= 4 && r.bottom <= window.innerHeight + 20
+    );
+  }
+
   function barAnchor() {
     const ed = getEditor();
     if (!ed) return null;
-    let n = ed;
-    for (let i = 0; i < 10 && n; i++) {
+    let n = ed.parentElement || ed;
+    for (let i = 0; i < 10 && n && n !== document.body && n.tagName !== "MAIN"; i++) {
       if (n.closest && n.closest("#zs-root")) break;
-      if (n.classList && [...n.classList].some((c) => c.startsWith("rounded"))) {
-        const r = n.getBoundingClientRect ? n.getBoundingClientRect() : null;
-        if (!r || (r.width >= 260 && r.height >= 36)) return n;
-      }
+      if (n.classList && [...n.classList].some((c) => c.startsWith("rounded")) && isAnchorCandidate(n)) return n;
       n = n.parentElement;
     }
     const f = ed.closest ? ed.closest("form") : null;
-    if (f && f.getBoundingClientRect) {
-      const r = f.getBoundingClientRect();
-      if (r.width >= 260) return f;
-    }
+    if (f && isAnchorCandidate(f)) return f;
     return null;
   }
 
-  let _locked = false;
   function setInputLock(on) {
     _locked = on;
     const ed = getEditor();
-    if (!ed) return;
-    if (ed.tagName === "TEXTAREA") {
-      if (on) {
+    if (on) {
+      if (!ed) return;
+      _lockedEl = ed;
+      if (ed.tagName === "TEXTAREA") {
         if (!ed.dataset.zsPlaceholder) ed.dataset.zsPlaceholder = ed.getAttribute("placeholder") || "";
         ed.setAttribute("readonly", "");
         ed.setAttribute("placeholder", "⏳ Agent working… please wait");
       } else {
-        ed.removeAttribute("readonly");
-        if (ed.dataset.zsPlaceholder != null) ed.setAttribute("placeholder", ed.dataset.zsPlaceholder);
+        if (!ed.dataset.zsPrevCe) ed.dataset.zsPrevCe = ed.getAttribute("contenteditable") || "true";
+        ed.setAttribute("contenteditable", "false");
       }
-    } else {
-      ed.setAttribute("contenteditable", on ? "false" : "true");
-      if (on) ed.setAttribute("data-zs-locked", "1");
-      else ed.removeAttribute("data-zs-locked");
+      ed.setAttribute("data-zs-locked", "1");
+      return;
+    }
+    const targets = [];
+    if (ed) targets.push(ed);
+    if (_lockedEl && _lockedEl !== ed && _lockedEl.isConnected) targets.push(_lockedEl);
+    _lockedEl = null;
+    for (const t of targets) {
+      if (t.tagName === "TEXTAREA") {
+        t.removeAttribute("readonly");
+        if (t.dataset.zsPlaceholder != null) t.setAttribute("placeholder", t.dataset.zsPlaceholder);
+      } else {
+        t.setAttribute("contenteditable", t.dataset.zsPrevCe || "true");
+        delete t.dataset.zsPrevCe;
+      }
+      t.removeAttribute("data-zs-locked");
     }
   }
 
@@ -483,7 +516,7 @@ const ZSProvider = (() => {
     const relock = _locked;
     if (relock) {
       if (editor.tagName === "TEXTAREA") editor.removeAttribute("readonly");
-      else editor.setAttribute("contenteditable", "true");
+      else editor.setAttribute("contenteditable", editor.dataset.zsPrevCe || "true");
     }
     try {
       editor.focus();
@@ -566,13 +599,21 @@ const ZSProvider = (() => {
   // stays gated. The mode dropdown's trigger is a `button[role="combobox"]` whose
   // visible text IS the current mode name; we read it to gate Start. Detection
   // fails OPEN (unknown → allow) so a DOM reskin never wrongly blocks the default.
-  const MODE_RE = /\b(direct|battle|agent|side by side)\b/i;
+  const MODE_RE = /^\s*(direct(?:\s+chat)?|battle(?:\s+mode)?|side by side|agent(?:\s+mode)?)\b/i;
   const SUPPORTED_MODES = new Set(["direct"]);
   function currentMode() {
     for (const c of document.querySelectorAll('button[role="combobox"]')) {
       if (c.offsetParent === null) continue;
-      const m = (c.textContent || "").trim().toLowerCase().match(MODE_RE);
-      if (m) return m[1];
+      const txt = (c.textContent || "").trim();
+      if (!txt || txt.length > 28) continue;
+      const m = txt.toLowerCase().match(MODE_RE);
+      if (m) {
+        const w = m[1];
+        if (w.startsWith("direct")) return "direct";
+        if (w.startsWith("battle")) return "battle";
+        if (w.startsWith("agent")) return "agent";
+        return "side by side";
+      }
     }
     return null; // unknown
   }
@@ -595,12 +636,17 @@ const ZSProvider = (() => {
     { route: /^\/image\//, aria: "Image", label: "Generate Image", tip: "the <b>Image</b> button" },
   ];
   function activeUnsupportedMode() {
+    const scope = composerFrame() || barAnchor();
     for (const m of UNSUPPORTED_MODES) {
       if (m.route.test(location.pathname)) return m;
-      for (const b of document.querySelectorAll(`button[aria-label="${m.aria}"]`)) {
+      if (!scope || !scope.querySelectorAll) continue;
+      for (const b of scope.querySelectorAll(`button[aria-label="${m.aria}"]`)) {
         if (b.offsetParent === null) continue;
-        if (b.getAttribute("aria-pressed") === "true") return m;
-        if (/bg-surface-tertiary|bg-surface-raised-alt/.test(b.className)) return m;
+        if (
+          b.getAttribute("aria-pressed") === "true" ||
+          b.getAttribute("data-state") === "on" ||
+          b.getAttribute("data-active") === "true"
+        ) return m;
       }
     }
     return null;
@@ -734,12 +780,23 @@ const ZSProvider = (() => {
     return { ready: isSupportedMode() };
   }
   async function ensureComposerReady(reason) {
+    if (!isSupportedMode() && !activeUnsupportedMode()) {
+      await restoreDirectOnce();
+      await waitFor(() => isSupportedMode() && !!getEditor(), 2000);
+    }
+    if (!getEditor()) await waitFor(() => !!getEditor(), 1500);
     const supported = isSupportedMode();
-    diag("mode_ready", { reason, provider: "arena", mode: currentMode(), supported });
+    const ed = getEditor();
+    diag("mode_ready", { reason, provider: "arena", mode: currentMode(), supported, hasEditor: !!ed });
     // Gate on a supported mode AND a present composer. An unsupported mode (Battle
     // / Side by Side) makes the core show its "mode not ready" banner instead of
     // starting - the light prevention the user asked for.
-    return { ready: supported && !!getEditor() };
+    return {
+      ready: supported && !!ed,
+      detail: !supported
+        ? modeWarning().replace(/<[^>]+>/g, "")
+        : (!ed ? "Arena input box not found on this page. Switch to Direct Chat or reload the page, then try again." : ""),
+    };
   }
 
   // ── Error / limit detection (site chrome only, never model output) ───────
