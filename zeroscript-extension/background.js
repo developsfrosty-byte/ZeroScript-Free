@@ -20,6 +20,7 @@ const PROVIDER_URLS = [
   "https://www.chatgpt.com/*",
   "https://chat.openai.com/*",
   "https://gemini.google.com/*",
+  "https://aistudio.google.com/*",
   "https://grok.com/*",
   "https://chat.mistral.ai/*",
   "https://www.kimi.ai/*",

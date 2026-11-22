@@ -113,7 +113,7 @@
     home: { eyebrow: "— HOME", sub: "Bridge online. Pick an AI, equip playbooks, build." },
     activity: { eyebrow: "— ACTIVITY", sub: "Real-time inspector for every MCP tool call executed by your AIs." },
     environment: { eyebrow: "— SKILLS", sub: "9 AAA Roblox Studio playbooks, 1-click preset packs, and custom .md skills." },
-    prompts: { eyebrow: "— PROMPTS", sub: "Global instructions synced across all 11 AIs plus reusable developer templates." },
+    prompts: { eyebrow: "— PROMPTS", sub: "Global instructions synced across all 12 AIs plus reusable developer templates." },
     connections: { eyebrow: "— CONNECTIONS", sub: "Health Doctor diagnostics, MCP processes, and live Studio command browser." },
     settings: { eyebrow: "— SETTINGS", sub: "Personalize accent theme, workspace folders, and tray behavior." },
   };
@@ -1002,7 +1002,7 @@
     const res = await api("/api/settings", { globalPrompt: $("#global-prompt-input").value });
     if (res && res.ok) {
       if (state.status) state.status.settings = res.settings;
-      $("#global-prompt-msg").textContent = "Synced to all 11 AIs.";
+      $("#global-prompt-msg").textContent = "Synced to all 12 AIs.";
       toast("Global instructions synced.");
       setTimeout(() => { $("#global-prompt-msg").textContent = ""; }, 2600);
     }

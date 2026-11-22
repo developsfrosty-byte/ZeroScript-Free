@@ -5,7 +5,7 @@ All notable changes to ZeroScript Free are documented here.
 ## [1.7.0] - 2026-11-22
 
 ### Added
-- **3 New AI Chat Providers (`zeroscript-extension/providers/`):** Full ZeroScript Studio integration for **Claude** (`claude.ai`, `claude.js`), **Grok** (`grok.com`, `grok.js`), and **Mistral Le Chat** (`chat.mistral.ai`, `mistral.js`), bringing total supported providers to **11**.
+- **4 New AI Chat Providers (`zeroscript-extension/providers/`):** Full ZeroScript Studio integration for **Claude** (`claude.ai`, `claude.js`), **Google AI Studio** (`aistudio.google.com`, `aistudio.js`), **Grok** (`grok.com`, `grok.js`), and **Mistral Le Chat** (`chat.mistral.ai`, `mistral.js`), bringing total supported providers to **12**.
 - **6 New AAA Developer Skill Playbooks (`skills/`):**
   - **Combat Systems, VFX & Game Feel** (`combat-vfx-gamefeel`)
   - **Luau Architecture, Networking & DataStore** (`luau-architecture-networking`)
@@ -16,7 +16,7 @@ All notable changes to ZeroScript Free are documented here.
 - **Modernized ZeroScript Desktop App (`app_ui/` + `app.py` + `bridge.py`):**
   - Modern 2026 dark glassmorphism studio redesign (`Plus Jakarta Sans` + `Inter` + `JetBrains Mono`), live data-flow pipeline visualization, pinned favorite AI quick-launch strip, and 5 selectable accent themes (`Indigo`, `Cyan`, `Emerald`, `Amber`, `Crimson`).
   - **Live Activity Inspector:** Real-time MCP tool call stream showing status, server, execution latency, arguments, and output previews (`/api/activity`).
-  - **Prompt Studio + Global Rules Sync:** Always-on Global Studio Instructions synced live across all 11 AI tabs, plus 6 AAA Starter Prompts and a custom reusable Prompt Library.
+  - **Prompt Studio + Global Rules Sync:** Always-on Global Studio Instructions synced live across all 12 AI tabs, plus 6 AAA Starter Prompts and a custom reusable Prompt Library.
   - **System Health Doctor:** One-click live check across WebSocket bridge, Chrome extension version parity, `StudioMCP.exe` discovery, and port `13469` conflict detection (`/api/diagnostics`).
   - **Skill Preset Packs & Markdown Import/Export:** 5 one-click loadout presets plus `.md` skill import/export.
   - **`Ctrl+K` Command Palette:** Instant keyboard jump across tabs, AI launches, skill toggles, presets, and quick actions.

@@ -5,6 +5,7 @@ const SUPPORTED_HOSTS = [
   "claude.ai",
   "chatgpt.com", "www.chatgpt.com", "chat.openai.com",
   "gemini.google.com",
+  "aistudio.google.com",
   "grok.com",
   "chat.mistral.ai",
   "www.kimi.ai", "kimi.ai",

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ZeroScript Free × Roblox Studio Agent",
   "version": "1.7.0",
-  "description": "Turn Claude, ChatGPT, DeepSeek, Gemini, Grok, Mistral, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio agent driven by local MCP + Pro Skills.",
+  "description": "Turn Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio agent driven by local MCP + Pro Skills.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://chat.deepseek.com/*",
@@ -12,6 +12,7 @@
     "https://www.chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
+    "https://aistudio.google.com/*",
     "https://grok.com/*",
     "https://chat.mistral.ai/*",
     "https://www.kimi.ai/*",
@@ -74,6 +75,12 @@
     {
       "matches": ["https://gemini.google.com/*"],
       "js": ["core/config.js", "core/parser.js", "providers/gemini.js", "core/main.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://aistudio.google.com/*"],
+      "js": ["core/config.js", "core/parser.js", "providers/aistudio.js", "core/main.js"],
       "css": ["overlay.css"],
       "run_at": "document_idle"
     },

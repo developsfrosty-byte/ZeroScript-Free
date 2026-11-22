@@ -106,6 +106,7 @@
     { name: "Claude", url: "https://claude.ai/new" },
     { name: "ChatGPT", url: "https://chatgpt.com/" },
     { name: "Gemini", url: "https://gemini.google.com/app" },
+    { name: "AI Studio", url: "https://aistudio.google.com/prompts/new_chat" },
     { name: "Grok", url: "https://grok.com/" },
     { name: "Mistral", url: "https://chat.mistral.ai/" },
     { name: "Kimi", url: "https://www.kimi.ai/" },
