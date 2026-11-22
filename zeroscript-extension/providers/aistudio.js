@@ -137,17 +137,27 @@ const ZSProvider = (() => {
   };
 
   function allItems() {
-    const turns = [...document.querySelectorAll(S.turnSel)].filter((el) => !el.closest("#zs-root"));
-    if (turns.length) return turns;
-    const seen = new Set();
-    const out = [];
-    for (const n of document.querySelectorAll('[data-turn-role="User"], [data-turn-role="Model"]')) {
-      if (n.closest("#zs-root")) continue;
-      const host = n.closest(S.turnSel) || n;
-      if (!seen.has(host)) { seen.add(host); out.push(host); }
+    const turnSels = [
+      S.turnSel,
+      '[data-turn-role="User"], [data-turn-role="Model"], [data-turn-role="user"], [data-turn-role="model"]',
+      "[data-message-author-role]",
+      "user-query, model-response",
+      ".chat-turn-container",
+    ];
+    for (const sel of turnSels) {
+      const seen = new Set();
+      const out = [];
+      for (const n of document.querySelectorAll(sel)) {
+        if (n.closest("#zs-root")) continue;
+        const host = sel === S.turnSel ? n : (n.closest(S.turnSel) || n);
+        if (!seen.has(host)) { seen.add(host); out.push(host); }
+      }
+      if (out.length) {
+        out.sort((a, b) => (a === b ? 0 : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)));
+        return out;
+      }
     }
-    out.sort((a, b) => (a === b ? 0 : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)));
-    return out;
+    return [];
   }
 
   function isUserItem(item) {
@@ -156,6 +166,10 @@ const ZSProvider = (() => {
     if (directRole) return directRole.toLowerCase() === "user";
     const roleNode = item.querySelector && item.querySelector("[data-turn-role]");
     if (roleNode) return (roleNode.getAttribute("data-turn-role") || "").toLowerCase() === "user";
+    const msgRole = item.getAttribute && item.getAttribute("data-message-author-role");
+    if (msgRole) return msgRole.toLowerCase() === "user";
+    if (item.tagName === "USER-QUERY") return true;
+    if (item.tagName === "MODEL-RESPONSE") return false;
     if (item.matches && item.matches(".chat-turn-container.user, .user-prompt-container")) return true;
     if (item.querySelector && item.querySelector(".chat-turn-container.user, .user-prompt-container")) return true;
     if (item.querySelector && item.querySelector(".chat-turn-container.model, .model-prompt-container")) return false;
@@ -299,20 +313,24 @@ const ZSProvider = (() => {
   const isInTurn = (b) => !!(b && b.closest && b.closest("ms-chat-turn, [data-turn-role]"));
 
   function isStopBtn(b) {
-    if (!b || isInTurn(b)) return false;
+    if (!b || isInTurn(b) || (b.closest && b.closest("#zs-root"))) return false;
     if (b.classList && b.classList.contains("stoppable")) return true;
     if (b.closest && b.closest("run-button.stoppable, .stoppable")) return true;
+    if (b.matches && b.matches('[data-testid*="stop" i]')) return true;
     const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`;
-    if (/\b(?:stop|cancel|arr[êe]t)\b/i.test(sig)) return true;
+    if (/\b(?:stop|cancel|abort|interrupt|arr[êe]t)\b/i.test(sig)) return true;
     const icon = b.querySelector && b.querySelector("mat-icon");
     if (icon) {
       const name = (icon.getAttribute("fonticon") || icon.getAttribute("data-mat-icon-name") || icon.textContent || "").trim().toLowerCase();
-      if (name === "stop" || name === "stop_circle") return true;
+      if (name === "stop" || name === "stop_circle" || name === "stop_circle_outline") return true;
     }
+    const comp = barAnchor() || composerFrame();
+    const inComposer = (comp && comp.contains(b)) || !!(b.closest && b.closest("run-button, ms-prompt-input-wrapper"));
+    if (inComposer && !NON_SEND_BTN_RE.test(sig) && b.querySelector && b.querySelector("svg rect")) return true;
     return false;
   }
 
-  const NON_SEND_BTN_RE = /stop|cancel|arr[êe]t|mic|voice|audio|record|dictat|attach|upload|file|image|add|plus|tune|setting|clear|compare|system|token|code|menu|close|dismiss/i;
+  const NON_SEND_BTN_RE = /stop|cancel|abort|interrupt|arr[êe]t|mic|voice|audio|record|dictat|attach|upload|file|image|add|plus|tune|setting|clear|compare|system|token|code|menu|close|dismiss|default|model/i;
   function sendButton() {
     for (const sel of S.runSels) {
       for (const b of document.querySelectorAll(sel)) {
@@ -342,10 +360,33 @@ const ZSProvider = (() => {
         if (!isInTurn(b) && isVisibleBox(b) && isStopBtn(b)) return b;
       }
     }
+    const scope = barAnchor() || composerFrame();
+    if (scope && scope.querySelectorAll) {
+      for (const b of scope.querySelectorAll("button")) {
+        if (!isInTurn(b) && isVisibleBox(b) && isStopBtn(b)) return b;
+      }
+    }
     return null;
   }
 
-  function streamText(item) { return item ? textWithout(item, ".zs-chip") : ""; }
+  function thinkingText(item) {
+    if (!item || !item.querySelectorAll) return "";
+    const parts = [];
+    for (const el of item.querySelectorAll(S.thinking)) {
+      if (el.closest && el.closest(".zs-chip")) continue;
+      if (el.parentElement && el.parentElement.closest(S.thinking)) continue;
+      const t = (el.innerText || el.textContent || "").trim();
+      if (t) parts.push(t);
+    }
+    return parts.join("\n");
+  }
+
+  function streamText(item) {
+    if (!item) return "";
+    const th = thinkingText(item);
+    const body = textWithout(replyContainer(item) || item, ".zs-chip");
+    return th ? (th + "\n" + body) : body;
+  }
   const streamLen = (item) => streamText(item === undefined ? lastAssistant() : item).length;
 
   let _streamMax = -1, _streamAt = 0, _streamItem = null;
@@ -360,7 +401,7 @@ const ZSProvider = (() => {
   }
   const grewWithin = (ms) => _streamMax > 1 && Date.now() - _streamAt < ms;
 
-  const WEDGE_MS = 10000;
+  const WEDGE_MS = 45000;
   let _stopSince = 0;
   function genActive() {
     sampleStream();
@@ -384,7 +425,7 @@ const ZSProvider = (() => {
   function snapshot() {
     try {
       const it = lastAssistant();
-      return it ? { th: 0, rp: itemText(it).length } : { th: 0, rp: 0 };
+      return it ? { th: thinkingText(it).trim().length, rp: itemText(it).length } : { th: 0, rp: 0 };
     } catch { return {}; }
   }
 
@@ -394,7 +435,7 @@ const ZSProvider = (() => {
     return {
       present: true,
       reply: classifyText(item, ".zs-chip").trim(),
-      thinking: "",
+      thinking: thinkingText(item).trim(),
       item,
     };
   }
@@ -493,8 +534,32 @@ const ZSProvider = (() => {
     if (b) try { b.click(); } catch {}
   }
 
-  function enforceComposer() { return { ready: true }; }
+  function isBuildMode() {
+    if (/^\/(?:u\/\d+\/)?(?:apps|build)(?:\/|$)/i.test(location.pathname)) return true;
+    const ed = getEditor();
+    if (ed) {
+      const sig = `${ed.getAttribute("placeholder") || ""} ${ed.getAttribute("aria-label") || ""}`;
+      if (/make changes,\s*add new features/i.test(sig)) return true;
+    }
+    return false;
+  }
+
+  function modeWarning() {
+    if (isBuildMode()) {
+      return "Switch Google AI Studio from <b>Build</b> to <b>Chat</b> — Build mode creates web-app previews instead of running Roblox commands. Open <b>aistudio.google.com/prompts/new_chat</b>.";
+    }
+    return "";
+  }
+
+  function enforceComposer() { return { ready: !isBuildMode() }; }
   async function ensureComposerReady(reason) {
+    if (isBuildMode()) {
+      diag("mode_ready", { reason, provider: "aistudio", buildMode: true });
+      return {
+        ready: false,
+        detail: "Google AI Studio is in Build (web-app preview) mode. Click Chat in the left sidebar or open aistudio.google.com/prompts/new_chat, then click Start Roblox agent.",
+      };
+    }
     if (!getEditor()) await waitFor(() => !!getEditor(), 1500);
     const ed = getEditor();
     diag("mode_ready", { reason, provider: "aistudio", hasEditor: !!ed });
@@ -554,6 +619,10 @@ const ZSProvider = (() => {
   }
 
   async function openNewChat() {
+    if (isBuildMode()) {
+      location.assign("https://aistudio.google.com/prompts/new_chat");
+      return true;
+    }
     for (const sel of ['a[href*="/prompts/new_chat"]', 'button[aria-label*="Create new prompt" i]', 'button[aria-label*="New chat" i]', 'a[aria-label*="New chat" i]']) {
       for (const el of document.querySelectorAll(sel)) {
         if (isVisibleBox(el)) {
@@ -654,7 +723,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-22_v1.7.1"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
@@ -662,7 +731,7 @@ const ZSProvider = (() => {
     getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barAnchor,
     setInputLock, typeAndSend, stopGeneration,
     isGenerating, isBusyNow, isHardGenerating,
-    enforceComposer, ensureComposerReady,
+    enforceComposer, ensureComposerReady, modeWarning,
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     attachImages, clearAttachments, openNewChat, conversationKey,
