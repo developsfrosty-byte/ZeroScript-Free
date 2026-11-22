@@ -229,11 +229,13 @@ html.zs-light #zs-unstable {
 #zs-action[data-kind="start"]:hover { filter: brightness(1.08); }
 /* Degraded start: Roblox is down but another MCP server is live. Amber to signal
    "startable, but not the full setup" - distinct from the blue full-ready start. */
-#zs-action[data-kind="start-degraded"] {
+#zs-action[data-kind="start-degraded"],
+#zs-action[data-kind="switchmode"] {
   background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border-color: transparent;
   box-shadow: 0 2px 12px rgba(217, 119, 6, 0.45);
 }
-#zs-action[data-kind="start-degraded"]:hover { filter: brightness(1.08); }
+#zs-action[data-kind="start-degraded"]:hover,
+#zs-action[data-kind="switchmode"]:hover { filter: brightness(1.08); }
 #zs-action[data-kind="newchat"] {
   background: rgba(99, 102, 241, 0.16);
   color: #c7d2fe;

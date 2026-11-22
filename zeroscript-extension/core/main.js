@@ -2698,6 +2698,10 @@
     async function onActionClick() {
       const kind = actionBtn.dataset.kind;
       if (kind === "start" || kind === "start-degraded") { startSession(); return; }
+      if (kind === "switchmode" && P.switchToSupportedMode) {
+        try { await P.switchToSupportedMode(); } catch {}
+        return;
+      }
       if (kind === "newchat") {
         let moved = false;
         if (P.openNewChat) {
@@ -3171,7 +3175,13 @@
         const modeWarn = P.modeWarning();
         if (modeWarn) {
           toneClass = "warn"; warn = true; msg = modeWarn;
-          if (kind === "start" || kind === "start-degraded") disabled = true;
+          if (P.switchToSupportedMode) {
+            label = P.modeSwitchLabel || "Switch mode";
+            kind = "switchmode";
+            disabled = false;
+          } else if (kind === "start" || kind === "start-degraded") {
+            disabled = true;
+          }
         }
       }
       // Only touch the DOM when something actually changed. renderBar runs on

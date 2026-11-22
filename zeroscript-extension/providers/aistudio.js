@@ -546,9 +546,23 @@ const ZSProvider = (() => {
 
   function modeWarning() {
     if (isBuildMode()) {
-      return "Switch Google AI Studio from <b>Build</b> to <b>Chat</b> — Build mode creates web-app previews instead of running Roblox commands. Open <b>aistudio.google.com/prompts/new_chat</b>.";
+      return "<b>Build mode</b> (web preview) · switch to <b>Chat</b> for Studio.";
     }
     return "";
+  }
+
+  async function switchToSupportedMode() {
+    for (const sel of ['a[href*="/prompts/new_chat"]', 'a[href*="/prompts"]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisibleBox(el)) {
+          try { el.click(); } catch {}
+          await waitFor(() => !isBuildMode() && !!getEditor(), 4000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://aistudio.google.com/prompts/new_chat");
+    return true;
   }
 
   function enforceComposer() { return { ready: !isBuildMode() }; }
@@ -732,6 +746,7 @@ const ZSProvider = (() => {
     setInputLock, typeAndSend, stopGeneration,
     isGenerating, isBusyNow, isHardGenerating,
     enforceComposer, ensureComposerReady, modeWarning,
+    modeSwitchLabel: "↗ Open Chat", switchToSupportedMode,
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     attachImages, clearAttachments, openNewChat, conversationKey,
