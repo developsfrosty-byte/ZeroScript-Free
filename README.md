@@ -4,16 +4,16 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
-**ZeroScript** is a free browser extension that turns ChatGPT, DeepSeek, Gemini, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio AI agent.
+**ZeroScript** is a free browser extension that turns Claude, ChatGPT, DeepSeek, Gemini, Grok, Mistral Le Chat, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio AI agent.
 Control Roblox Studio with AI directly from your browser - read/edit scripts, run Luau, generate assets, all from a normal AI chat. No API key, no terminal, no coding needed.
 
 > 🌐 **Website: [zerodev.tools/zeroscript](https://zerodev.tools/zeroscript)** the free Lemonade.gg / Luamotion alternative for building Roblox games with AI.
 
-Eight AI providers are supported: **DeepSeek** (chat.deepseek.com, recommended), **ChatGPT** (chatgpt.com), **Google Gemini** (gemini.google.com), **Kimi** (kimi.ai, Moonshot AI), **GLM** (chat.z.ai, Z.ai), **Qwen** (chat.qwen.ai), **Arena** (arena.ai, a multi-model playground) and **Meta AI** (meta.ai). On ChatGPT, screenshots and image input are turned off on purpose: the free tier limits files and images on a separate quota from messages, so vision would only work part of the day. Gemini and Kimi can be unstable: Gemini tends to stop using the Roblox tools in long sessions, and Kimi sometimes uses its own native tools instead of the Roblox commands. On Arena, use **Direct** mode (ZeroScript only supports Direct; it blocks Start in Battle / Side-by-Side / Agent modes). DeepSeek is the recommended provider.
+Eleven AI providers are supported: **Claude** (claude.ai), **DeepSeek** (chat.deepseek.com, recommended), **ChatGPT** (chatgpt.com), **Google Gemini** (gemini.google.com), **Grok** (grok.com), **Mistral Le Chat** (chat.mistral.ai), **Kimi** (kimi.ai), **GLM** (chat.z.ai), **Qwen** (chat.qwen.ai), **Arena** (arena.ai / lmarena.ai), and **Meta AI** (meta.ai). On ChatGPT, screenshots and image input are turned off on purpose because the free tier limits files separately from messages. On Arena, use **Direct** mode (ZeroScript blocks Start in Battle / Side-by-Side / Agent modes).
 
 > 💬 **Stuck? Join the [Discord community](https://discord.gg/9aNyZsMWcb)** get help, share feedback, and follow updates.
 
-> *Also known as: ZeroScript Roblox, ZeroScript free download, Roblox ChatGPT agent, Roblox DeepSeek agent, Roblox Gemini agent, Roblox Kimi agent, Roblox GLM agent, Roblox Qwen agent, Roblox Arena agent, Roblox Meta AI agent, Roblox Studio AI automation, Luau AI, MCP Roblox, lemonade alternative free, lemonade.gg alternative, free Roblox AI agent, free lemonade roblox alternative*
+> *Also known as: ZeroScript Roblox, ZeroScript free download, Roblox Claude agent, Roblox ChatGPT agent, Roblox DeepSeek agent, Roblox Gemini agent, Roblox Grok agent, Roblox Mistral agent, Roblox Kimi agent, Roblox GLM agent, Roblox Qwen agent, Roblox Arena agent, Roblox Meta AI agent, Roblox Studio AI automation, Luau AI, MCP Roblox*
 
 ## ⚠️ ZeroScript is Free Beware of Paid Copycats
 
@@ -24,10 +24,10 @@ If you come across a site or extension using the ZeroScript name that asks for p
 ## How it works
 
 ```
-AI chat (ChatGPT / DeepSeek / Gemini / Kimi / GLM / Qwen / Arena / Meta AI, in your browser) -> ZeroScript Extension -> Bridge (your PC) -> Roblox Studio
+AI chat (Claude / DeepSeek / ChatGPT / Gemini / Grok / Mistral / Kimi / GLM / Qwen / Arena / Meta AI) -> ZeroScript Extension -> Bridge (your PC) -> Roblox Studio
 ```
 
-The extension runs inside the chat page (ChatGPT, DeepSeek, Gemini, Kimi, GLM, Qwen, Arena or Meta AI). When you type a request, it sends commands to the Bridge running on your PC, which drives Roblox Studio through the built-in MCP server.
+The extension runs inside the chat page. When you type a request, it sends commands to the Bridge running on your PC, which drives Roblox Studio through the built-in MCP server.
 
 ## Setup
 
@@ -64,11 +64,11 @@ Once the app or window says **Bridge online**, you're ready to connect.
 
 ### 4. Start a session
 
-Go to https://chat.deepseek.com (recommended), https://chatgpt.com, https://gemini.google.com, https://www.kimi.ai, https://chat.z.ai, https://chat.qwen.ai, https://arena.ai or https://www.meta.ai and open a new chat. The ZeroScript bar appears above the input box. Click **Start session**. Type what you want to build.
+Go to https://claude.ai, https://chat.deepseek.com, https://chatgpt.com, https://gemini.google.com, https://grok.com, https://chat.mistral.ai, https://www.kimi.ai, https://chat.z.ai, https://chat.qwen.ai, https://arena.ai or https://www.meta.ai and open a new chat. The ZeroScript bar appears above the input box. Click **▶︎ Start Roblox agent**. Type what you want to build.
 
-> Only works on chat.deepseek.com, chatgpt.com, gemini.google.com, kimi.ai, chat.z.ai, chat.qwen.ai, arena.ai and meta.ai - it will not work on any other site.
-> On Arena, keep the mode dropdown on **Direct** - ZeroScript blocks Start in Battle / Side-by-Side / Agent modes (it only drives a single Direct reply).
-> Gemini and Kimi can be unstable (model behavior, not the extension): Gemini may stop using the Roblox tools after a while, and Kimi may use its own native tools instead. If the AI starts answering in plain text instead of acting, remind it to use the commands or start a new session.
+> Works across all 11 supported AI chat sites above (including `lmarena.ai` and `www.chatgpt.com`).
+> On Arena, keep the mode dropdown on **Direct** - ZeroScript blocks Start in Battle / Side-by-Side / Agent modes.
+> If Gemini or any AI ever claims the bridge is offline mid-chat while Studio is connected, ZeroScript now automatically reminds it and refreshes instructions behind the scenes.
 ### 5. Watch the setup tutorial
 
 [Watch the setup tutorial on YouTube](https://youtu.be/kPKiZLZ9_Ps)
@@ -81,8 +81,15 @@ Go to https://chat.deepseek.com (recommended), https://chatgpt.com, https://gemi
 - Generate meshes, materials, and models
 - Browse and insert from the Creator Store
 - Control play-testing
-- **Apply specialized AAA Agent Skills** built-in playbooks for UI & HUD Craftsmanship, 3D Building & Architecture, and Cutscenes & Camera Choreography (plus custom skills via the desktop app)
+- **Apply 9 specialized AAA Agent Skills** — built-in playbooks for UI & HUD Craftsmanship, 3D Building & Architecture, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture/Networking/DataStore, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
 - **Remember your project across sessions** persistent project memory saved inside your place
+
+## New in 1.7.0
+
+- **ChatGPT & Arena Start Bar Fixes.** Hardened `chatgpt.js` with non-React `barAnchor()` placement and multi-selector editor detection (`chatgpt.com` + `www.chatgpt.com`); fixed `arena.js` across `arena.ai` / `lmarena.ai` / `chat.lmsys.org` with dual `<textarea>`/`contenteditable` support, safe dialog gating, and an actionable **`＋ New agent chat`** button on older chats.
+- **3 New AI Providers (11 Total).** Added first-class Studio agent integration for **Claude** (`claude.ai`), **Grok** (`grok.com`), and **Mistral Le Chat** (`chat.mistral.ai`).
+- **6 New Pro Developer Playbooks + Preset Packs.** Expanded built-in skills from 3 to 9 (Combat/VFX, Luau/DataStore, NPC AI/Bosses, Lighting/Audio, Economy/Loops, Performance/Mobile) with 5 one-click loadout presets and `.md` import/export.
+- **Modern Desktop Workspace + 5 New Features.** Redesigned dark glassmorphism UI with **Live Activity Inspector**, **Prompt Studio + Global Rules Sync** across all 11 AIs, **System Health Doctor** diagnostics, **`Ctrl+K` Command Palette**, pinned AI quick-launch, and 5 selectable accent themes.
 
 ## New in 1.6.0
 
@@ -115,7 +122,7 @@ See [CHANGELOG.md](CHANGELOG.md) for older releases.
 |-----|---------|
 | Green | Bridge + Studio ready (a place is open) |
 | Yellow | Bridge OK, but Studio isn't usable yet - open Roblox Studio, load a place, or enable its MCP server (hover the dot for the exact reason) |
-| Grey | Bridge offline - run start.bat (Windows) or MacOS_Start.command (macOS) |
+| Grey | Bridge offline - open `ZeroScript.vbs` (Windows) or `MacOS_Start.command` (macOS) |
 
 ## Requirements
 

@@ -272,7 +272,7 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       const parts = ["\n\n━━━ AGENT SKILLS (PRO PLAYBOOKS) ━━━"];
       if (autoSkills.length) {
         parts.push(
-          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves UI/HUD design, 3D building/architecture, cutscenes/cinematics, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
+          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves UI/HUD, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
           autoSkills.map((s) => `- ${s.id} (${s.name}): ${s.tagline || s.category || "Pro playbook"}`).join("\n")
         );
       }

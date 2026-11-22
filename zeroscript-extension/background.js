@@ -13,7 +13,28 @@ const URL = `ws://127.0.0.1:${PORT}`;
 // Chat sites where a ZeroScript provider content script runs. Status pushes go
 // to every tab matching these. Add the new provider's URL pattern here (and in
 // manifest.json content_scripts + host_permissions) when integrating another AI.
-const PROVIDER_URLS = ["https://chat.deepseek.com/*", "https://chatgpt.com/*", "https://chat.openai.com/*", "https://gemini.google.com/*", "https://www.kimi.ai/*", "https://kimi.ai/*", "https://chat.z.ai/*", "https://chat.qwen.ai/*", "https://arena.ai/*", "https://www.meta.ai/*", "https://meta.ai/*"];
+const PROVIDER_URLS = [
+  "https://chat.deepseek.com/*",
+  "https://claude.ai/*",
+  "https://chatgpt.com/*",
+  "https://www.chatgpt.com/*",
+  "https://chat.openai.com/*",
+  "https://gemini.google.com/*",
+  "https://grok.com/*",
+  "https://chat.mistral.ai/*",
+  "https://www.kimi.ai/*",
+  "https://kimi.ai/*",
+  "https://chat.z.ai/*",
+  "https://chat.qwen.ai/*",
+  "https://arena.ai/*",
+  "https://www.arena.ai/*",
+  "https://lmarena.ai/*",
+  "https://www.lmarena.ai/*",
+  "https://beta.lmarena.ai/*",
+  "https://chat.lmsys.org/*",
+  "https://www.meta.ai/*",
+  "https://meta.ai/*",
+];
 
 const RECONNECT_MIN = 1000;
 const RECONNECT_MAX = 5000;
@@ -34,6 +55,7 @@ let nextId = 1;
 const pending = new Map(); // id -> {resolve, timer}
 let toolsCache = [];
 let skillsCache = [];
+let globalPromptCache = "";
 let mcpAlive = false;
 let serversCache = [];
 // true/false = a PLACE is loaded and usable in Roblox Studio; null = unknown.
@@ -229,6 +251,7 @@ function handleBridgeMessage(msg) {
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
     if (Array.isArray(msg.skills)) skillsCache = msg.skills;
+    if (typeof msg.globalPrompt === "string") globalPromptCache = msg.globalPrompt;
     broadcastStatus();
     return;
   }
@@ -240,6 +263,7 @@ function handleBridgeMessage(msg) {
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
     if (Array.isArray(msg.skills)) skillsCache = msg.skills;
+    if (typeof msg.globalPrompt === "string") globalPromptCache = msg.globalPrompt;
     mcpAlive = !!msg.mcp_alive;
     resolvePending(msg.id, { ok: true, tools: toolsCache });
     broadcastStatus();
@@ -262,6 +286,7 @@ function handleBridgeMessage(msg) {
     if (Array.isArray(msg.tools)) toolsCache = msg.tools;
     if (Array.isArray(msg.servers)) serversCache = msg.servers;
     if (Array.isArray(msg.skills)) skillsCache = msg.skills;
+    if (typeof msg.globalPrompt === "string") globalPromptCache = msg.globalPrompt;
     resolvePending(msg.id, { ok: !!msg.ok, alive: msg.alive, error: msg.error });
     broadcastStatus();
     return;
@@ -297,7 +322,7 @@ function failAllPending(reason) {
 
 // ── status push to any open DeepSeek tab + popup ─────────────────────────
 function statusObj() {
-  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, tools: toolsCache.length, servers: serversCache, skills: skillsCache };
+  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, tools: toolsCache.length, servers: serversCache, skills: skillsCache, globalPrompt: globalPromptCache };
 }
 
 function broadcastStatus() {

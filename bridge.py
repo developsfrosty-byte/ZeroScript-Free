@@ -77,7 +77,7 @@ def _enable_ansi_colors():
 HOST = "127.0.0.1"
 # Keep in sync with zeroscript-extension/manifest.json "version" - printed at
 # startup so a user's terminal output alone tells us which build they're on.
-BRIDGE_VERSION = "1.6.0"
+BRIDGE_VERSION = "1.7.0"
 PORT = int(os.environ.get("ZS_BRIDGE_PORT", "17613"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.json")
@@ -88,7 +88,81 @@ EMBEDDED_MODE = False
 START_TIME = time.time()
 LOG_BUFFER = collections.deque(maxlen=400)
 LOG_LOCK = threading.Lock()
+ACTIVITY_BUFFER = collections.deque(maxlen=150)
+ACTIVITY_LOCK = threading.Lock()
+ACTIVITY_STATS = {"total": 0, "ok": 0, "errors": 0, "totalMs": 0}
+_activity_seq = 0
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+
+
+def record_activity(name, args, res, elapsed_s):
+    """Record one completed MCP tool call for the Desktop App Activity view."""
+    global _activity_seq
+    srv = "roblox"
+    try:
+        with mgr.index_lock:
+            entry = mgr.index.get(name)
+            if entry is not None and entry[0] is not None:
+                srv = entry[0].id
+    except Exception:
+        pass
+    try:
+        arg_text = json.dumps(args or {}, ensure_ascii=False)
+    except Exception:
+        arg_text = str(args or {})
+    if len(arg_text) > 800:
+        arg_text = arg_text[:797] + "..."
+    ok = bool(res.get("ok"))
+    raw_out = res.get("text") if ok else (res.get("error") or res.get("text") or "")
+    out_text = str(raw_out or "").strip()
+    if len(out_text) > 1000:
+        out_text = out_text[:997] + "..."
+    dur_ms = max(0, int(round(float(elapsed_s or 0.0) * 1000)))
+    img_count = len(res.get("images") or []) if ok else 0
+    with ACTIVITY_LOCK:
+        _activity_seq += 1
+        ACTIVITY_STATS["total"] += 1
+        if ok:
+            ACTIVITY_STATS["ok"] += 1
+        else:
+            ACTIVITY_STATS["errors"] += 1
+        ACTIVITY_STATS["totalMs"] += dur_ms
+        ACTIVITY_BUFFER.appendleft({
+            "id": _activity_seq,
+            "ts": time.strftime("%H:%M:%S"),
+            "tool": name,
+            "server": srv,
+            "ok": ok,
+            "ms": dur_ms,
+            "images": img_count,
+            "args": arg_text,
+            "preview": out_text,
+        })
+
+
+def get_activity():
+    with ACTIVITY_LOCK:
+        total = ACTIVITY_STATS["total"]
+        avg_ms = int(round(ACTIVITY_STATS["totalMs"] / total)) if total else 0
+        return {
+            "items": list(ACTIVITY_BUFFER),
+            "stats": {
+                "total": total,
+                "ok": ACTIVITY_STATS["ok"],
+                "errors": ACTIVITY_STATS["errors"],
+                "avgMs": avg_ms,
+            },
+        }
+
+
+def clear_activity():
+    with ACTIVITY_LOCK:
+        ACTIVITY_BUFFER.clear()
+        ACTIVITY_STATS["total"] = 0
+        ACTIVITY_STATS["ok"] = 0
+        ACTIVITY_STATS["errors"] = 0
+        ACTIVITY_STATS["totalMs"] = 0
+    return get_activity()
 
 
 def _win_hidden_kwargs():
@@ -1371,6 +1445,7 @@ async def run_tool_task(ws, name, args, timeout, rid):
     t0 = time.monotonic()
     res = await asyncio.to_thread(safe_call, name, args, timeout)
     elapsed = time.monotonic() - t0
+    record_activity(name, args, res, elapsed)
     tag = "gr" if res.get("ok") else "rd"
     summary = (res.get("text") or res.get("error") or "")[:80].replace("\n", " ")
     slow = "  [SLOW]" if elapsed > 5 else ""
@@ -1417,6 +1492,7 @@ async def broadcast_status():
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
             "skills": skills_manager.list_summary(),
+            "globalPrompt": skills_manager.load_settings().get("globalPrompt", ""),
             "port": PORT,
         })
     except Exception:
@@ -1442,6 +1518,7 @@ async def handler(ws):
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
             "skills": skills_manager.list_summary(),
+            "globalPrompt": skills_manager.load_settings().get("globalPrompt", ""),
             "port": PORT,
         }))
         async for raw in ws:
@@ -1478,6 +1555,7 @@ async def handler(ws):
                     "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
                     "servers": mgr.health(),
                     "skills": skills_manager.list_summary(),
+                    "globalPrompt": skills_manager.load_settings().get("globalPrompt", ""),
                 }))
 
             elif mtype == "list_skills":

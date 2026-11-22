@@ -228,16 +228,39 @@ const ZSProvider = (() => {
   // textareas are recaptcha/aria-hidden). Scope away ZeroScript's own settings
   // textarea (#zs-root) so the send hooks' "not on a chat page" guard holds on
   // login/OAuth pages that have no site composer.
+  function isVisibleEditor(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
+    if (el.classList && el.classList.contains("g-recaptcha-response")) return false;
+    if (!el.getBoundingClientRect) return true;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    try {
+      const st = getComputedStyle(el);
+      if (st.display === "none" || st.visibility === "hidden") return false;
+    } catch {}
+    return true;
+  }
+  const EDITOR_SELS = [
+    "form textarea",
+    'textarea[placeholder]',
+    'textarea:not([aria-hidden="true"]):not(.g-recaptcha-response)',
+    'div.ProseMirror[contenteditable="true"]',
+    'div.tiptap[contenteditable="true"]',
+    '[contenteditable="true"][role="textbox"]',
+  ];
   const getEditor = () => {
-    for (const e of document.querySelectorAll("form textarea")) {
-      if (!e.closest("#zs-root")) return e;
+    for (const sel of EDITOR_SELS) {
+      for (const e of document.querySelectorAll(sel)) {
+        if (isVisibleEditor(e)) return e;
+      }
     }
     return null;
   };
   const editorText = () => {
     const e = getEditor();
     if (!e) return "";
-    return e.value != null ? e.value : e.textContent || "";
+    return e.tagName === "TEXTAREA" ? (e.value != null ? e.value : "") : (e.textContent || "");
   };
 
   const lastAssistant = () => {
@@ -263,48 +286,58 @@ const ZSProvider = (() => {
   }
 
   const chatIsEmpty = () => allItems().length === 0;
-  // A genuinely fresh chat: the /text/* route with the composer rendered and no
-  // turns. An existing conversation is /c/<id>, so it never gates.
+  // A genuinely fresh chat: any empty route outside /c/<id> with the composer mounted.
   const isFreshChat = () =>
-    chatIsEmpty() && /^\/text\//.test(location.pathname) && !!getEditor();
+    chatIsEmpty() && !/^\/c\/[^/]+/.test(location.pathname) && !!getEditor();
 
-  // The whole composer the Start gate hides as one unit = the <form>.
+  // The whole composer the Start gate hides as one unit.
   const composerFrame = () => {
     const ed = getEditor();
-    return ed ? ed.closest("form") : null;
+    return ed ? (ed.closest("form") || ed.parentElement) : null;
   };
 
   // Arena is a React app that reconciles the composer subtree, so we must NOT
-  // insert #zs-bar into it (the diff could nest the composer inside the bar, as
-  // seen on Kimi/GLM). barAnchor() returns the rounded composer CARD; the core
-  // (placeBar anchored branch) keeps the bar in #zs-root, hugs the card's top
-  // edge at full width and reserves the strip with padding-top.
+  // insert #zs-bar into it. barAnchor() returns the wide rounded composer CARD
+  // (requiring >= 260x36 so tiny rounded icon buttons are skipped); the core
+  // keeps the bar in #zs-root, hugs the card's top edge, or floats if null.
   function barAnchor() {
     const ed = getEditor();
     if (!ed) return null;
     let n = ed;
     for (let i = 0; i < 10 && n; i++) {
-      if ([...n.classList].some((c) => c.startsWith("rounded"))) return n;
+      if (n.closest && n.closest("#zs-root")) break;
+      if (n.classList && [...n.classList].some((c) => c.startsWith("rounded"))) {
+        const r = n.getBoundingClientRect ? n.getBoundingClientRect() : null;
+        if (!r || (r.width >= 260 && r.height >= 36)) return n;
+      }
       n = n.parentElement;
     }
-    return ed.closest("form");
+    const f = ed.closest ? ed.closest("form") : null;
+    if (f && f.getBoundingClientRect) {
+      const r = f.getBoundingClientRect();
+      if (r.width >= 260) return f;
+    }
+    return null;
   }
 
-  // ── Input lock ────────────────────────────────────────────────────────────
-  // The textarea is real: `readonly` blocks the user but is IGNORED by the
-  // native prototype setter used in setTextareaValue(), so our own injections
-  // keep working. getEditor() keys off the <form>, not the placeholder, so the
-  // placeholder swap below is safe.
+  let _locked = false;
   function setInputLock(on) {
+    _locked = on;
     const ed = getEditor();
     if (!ed) return;
-    if (on) {
-      if (!ed.dataset.zsPlaceholder) ed.dataset.zsPlaceholder = ed.getAttribute("placeholder") || "";
-      ed.setAttribute("readonly", "");
-      ed.setAttribute("placeholder", "⏳ Agent working… please wait");
+    if (ed.tagName === "TEXTAREA") {
+      if (on) {
+        if (!ed.dataset.zsPlaceholder) ed.dataset.zsPlaceholder = ed.getAttribute("placeholder") || "";
+        ed.setAttribute("readonly", "");
+        ed.setAttribute("placeholder", "⏳ Agent working… please wait");
+      } else {
+        ed.removeAttribute("readonly");
+        if (ed.dataset.zsPlaceholder != null) ed.setAttribute("placeholder", ed.dataset.zsPlaceholder);
+      }
     } else {
-      ed.removeAttribute("readonly");
-      if (ed.dataset.zsPlaceholder != null) ed.setAttribute("placeholder", ed.dataset.zsPlaceholder);
+      ed.setAttribute("contenteditable", on ? "false" : "true");
+      if (on) ed.setAttribute("data-zs-locked", "1");
+      else ed.removeAttribute("data-zs-locked");
     }
   }
 
@@ -425,66 +458,77 @@ const ZSProvider = (() => {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  async function setEditorValue(el, v) {
+    if (el.tagName === "TEXTAREA") {
+      setTextareaValue(el, v);
+      return;
+    }
+    el.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const lines = String(v).split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]) document.execCommand("insertText", false, lines[i]);
+      if (i < lines.length - 1) document.execCommand("insertLineBreak");
+      if (i && i % 40 === 0) await sleep(0);
+    }
+  }
+
   async function typeAndSend(text, images) {
     const editor = getEditor();
     if (!editor) throw new Error("Arena input box not found");
-    editor.focus();
-    setTextareaValue(editor, truncateForSend(text));
-    if (images && images.length) tagImages(images);
-    diag("arena.tas.enter", {
-      textLen: (text || "").length,
-      imgId: images ? images.__zsId : null,
-      imgCount: images ? images.length : 0,
-      attachedId: _attachedImages ? _attachedImages.__zsId : null,
-      sameSet: images === _attachedImages,
-      pendingBefore: pendingCount(),
-    });
-    // The send button being ENABLED is Arena's own "ready to accept a send"
-    // signal. CRITICAL for images: in an A/B battle the button stays DISABLED
-    // while the SECOND candidate keeps streaming, but the core (which tracks
-    // candidate A, already finished) calls us during that window. The button is
-    // Arena's truth here, so we WAIT on it rather than on our own generation
-    // heuristics. We wait BEFORE staging the image so a not-yet-sendable image is
-    // never left visible/stranded in the composer (the reported "phantom" that
-    // the next capture then inherited). Enabling also needs text present (set
-    // above). Long window covers a slow second candidate.
-    const sendReady = () => {
-      const b = sendButton();
-      return !!b && !b.disabled && b.getAttribute("aria-disabled") !== "true";
-    };
-    const ready1 = await waitFor(sendReady, 60000);
-    diag("arena.tas.ready", { ready: ready1 });
-    // Attach LAST, right before the send - see gemini.js for why. Guard against
-    // the core's up-to-4 typeAndSend retries (same `images` array ref): skip when
-    // this exact set was already staged (identity match), and drop any stale
-    // preview from a prior failed set so it can't block a genuinely new capture.
-    if (images && images.length && images !== _attachedImages) {
-      if (hasPendingAttachment()) { diag("arena.tas.clearStale", { pending: pendingCount() }); clearAttachments(); }
-      try {
-        const ok = await attachImages(images);
-        if (ok) _attachedImages = images;
-        diag("arena.tas.attached", { imgId: images.__zsId, ok, pendingAfter: pendingCount() });
-      } catch (e) { diag("arena.tas.attachErr", { msg: String(e && e.message || e) }); }
-      // Staging the file re-disables send for ~0.4s while Arena ingests it.
-      await waitFor(sendReady, 6000);
-    } else {
-      diag("arena.tas.skipAttach", { reason: !images || !images.length ? "no-images" : "same-set", imgId: images ? images.__zsId : null });
+    const relock = _locked;
+    if (relock) {
+      if (editor.tagName === "TEXTAREA") editor.removeAttribute("readonly");
+      else editor.setAttribute("contenteditable", "true");
     }
-    // Click and CONFIRM the send took (editor clears the instant Arena accepts
-    // it, image AND text paths). Re-click until it clears so a single swallowed
-    // click can't strand the message/attachment. No re-attach here.
-    let sent = false;
-    for (let i = 0; i < 6 && !sent; i++) {
-      if (sendReady()) {
-        try { sendButton().click(); } catch {}
-      } else if (!isHardGenerating()) {
-        const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-        editor.dispatchEvent(new KeyboardEvent("keydown", o));
-        editor.dispatchEvent(new KeyboardEvent("keyup", o));
+    try {
+      editor.focus();
+      await setEditorValue(editor, truncateForSend(text));
+      if (images && images.length) tagImages(images);
+      diag("arena.tas.enter", {
+        textLen: (text || "").length,
+        imgId: images ? images.__zsId : null,
+        imgCount: images ? images.length : 0,
+        attachedId: _attachedImages ? _attachedImages.__zsId : null,
+        sameSet: images === _attachedImages,
+        pendingBefore: pendingCount(),
+      });
+      const sendReady = () => {
+        const b = sendButton();
+        return !!b && !b.disabled && b.getAttribute("aria-disabled") !== "true";
+      };
+      const ready1 = await waitFor(sendReady, 60000);
+      diag("arena.tas.ready", { ready: ready1 });
+      if (images && images.length && images !== _attachedImages) {
+        if (hasPendingAttachment()) { diag("arena.tas.clearStale", { pending: pendingCount() }); clearAttachments(); }
+        try {
+          const ok = await attachImages(images);
+          if (ok) _attachedImages = images;
+          diag("arena.tas.attached", { imgId: images.__zsId, ok, pendingAfter: pendingCount() });
+        } catch (e) { diag("arena.tas.attachErr", { msg: String(e && e.message || e) }); }
+        await waitFor(sendReady, 6000);
+      } else {
+        diag("arena.tas.skipAttach", { reason: !images || !images.length ? "no-images" : "same-set", imgId: images ? images.__zsId : null });
       }
-      sent = await waitFor(() => editorText().trim() === "", 700);
+      let sent = false;
+      for (let i = 0; i < 6 && !sent; i++) {
+        if (sendReady()) {
+          try { sendButton().click(); } catch {}
+        } else if (!isHardGenerating()) {
+          const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+          editor.dispatchEvent(new KeyboardEvent("keydown", o));
+          editor.dispatchEvent(new KeyboardEvent("keyup", o));
+        }
+        sent = await waitFor(() => editorText().trim() === "", 700);
+      }
+      diag("arena.tas.sent", { sent, editorLen: editorText().length, pendingAfterSend: pendingCount() });
+    } finally {
+      if (relock) setInputLock(true);
     }
-    diag("arena.tas.sent", { sent, editorLen: editorText().length, pendingAfterSend: pendingCount() });
   }
 
   // Arena shows "Generating…" for a beat BEFORE the native "Stop generation"
@@ -660,10 +704,22 @@ const ZSProvider = (() => {
   // bar whenever this is true (same get-out-of-the-way path as captchaPresent).
   // reallyVisible() ignores display:none / detached closed dialogs, so a chat page
   // with no open modal never matches. Our own UI lives in #zs-root and is skipped.
+  function rectsOverlap(a, b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
   function overlayBlocking() {
+    const ed = getEditor();
+    const comp = (ed && (ed.closest("form") || ed)) || null;
+    const cr = comp && comp.getBoundingClientRect ? comp.getBoundingClientRect() : null;
+    const cx = innerWidth * 0.5, cy = innerHeight * 0.5;
     for (const d of document.querySelectorAll('[role="dialog"]')) {
       if (d.closest("#zs-root")) continue;
-      if (reallyVisible(d)) return true;
+      if (!reallyVisible(d)) continue;
+      const modal = d.getAttribute("aria-modal") === "true";
+      const r = d.getBoundingClientRect();
+      const overCenter = r.width >= 260 && r.height >= 160 && cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+      const overComp = cr && r.width >= 200 && rectsOverlap(r, cr);
+      if (modal || overCenter || overComp) return true;
     }
     return false;
   }
@@ -772,15 +828,29 @@ const ZSProvider = (() => {
     } catch {}
   }
 
-  // /text/* = a fresh chat with no conversation id yet → "" (transient, never
-  // persisted as "started"). A real conversation is /c/<uuid>.
-  const conversationKey = () => (/^\/text\//.test(location.pathname) ? "" : location.pathname);
+  async function openNewChat() {
+    const a = document.querySelector('a[href="/text/direct"], a[href="/"], button[aria-label*="New" i]');
+    if (a) {
+      try { a.click(); } catch {}
+      await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+      return true;
+    }
+    location.assign(location.origin + "/text/direct");
+    return true;
+  }
+
+  // Only /c/<uuid> conversations get persisted as started; /, /text/direct,
+  // and transient home routes stay "" so fresh chats are never marked started.
+  const conversationKey = () => (/^\/c\/[^/]+/.test(location.pathname) ? location.pathname : "");
+
+  const PROMPT_EXTRA = `- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: the ZeroScript browser extension is live in this tab for the entire session. Always emit a fenced ZeroScript command block (multi_edit or ###LUA### ... ###END_LUA###) instead of asking the user to paste scripts into Roblox Studio.`;
 
   // ── User-send interception ────────────────────────────────────────────────
   function installSendHooks(handlers) {
     document.addEventListener(
       "keydown",
       (e) => {
+        if (!e.isTrusted) return;
         if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
         const editor = getEditor();
         if (!editor || !editor.contains(e.target)) return;
@@ -799,6 +869,7 @@ const ZSProvider = (() => {
     document.addEventListener(
       "click",
       (e) => {
+        if (!e.isTrusted) return;
         if (!getEditor()) return;
         const btn = e.target && e.target.closest && e.target.closest("button");
         if (!btn) return;
@@ -883,7 +954,11 @@ const ZSProvider = (() => {
     // increases for every new reply - the core's watcher uses this to refuse
     // finalizing before this send's reply turn exists.
     reliableCounts: true,
-    init({ diag: d } = {}) { if (d) diag = d; try { restoreDirectOnce(); } catch {} },
+    init({ diag: d } = {}) {
+      if (d) diag = d;
+      try { document.documentElement.setAttribute("data-zs-arena-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { restoreDirectOnce(); } catch {}
+    },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
@@ -896,7 +971,10 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
+    promptExtra: PROMPT_EXTRA,
+    resendSystemEvery: 5,
+    sendCharBudget: SEND_CAP - 4000,
   };
 })();

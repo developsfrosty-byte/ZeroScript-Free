@@ -142,11 +142,12 @@ html.zs-light #zs-bar.zs-bar-anchored {
    inside it. */
 [class*="composer-surface"]:has(> #zs-bar.zs-prov-chatgpt) { padding-bottom: 12px; }
 
-/* Meta AI's composer card has a large corner radius (rounded-32 = 32px), so the
-   full-width anchored bar's left/right ends run under the curve - the brand and
-   the Discord/switch/support icons crowd the rounding. Inset the content by ~the
-   radius so both edges clear the corners cleanly. */
+/* Meta AI / anchored composer cards carry large border radii, so inset both ends cleanly. */
 #zs-bar.zs-bar-anchored.zs-prov-meta { padding-left: 30px; padding-right: 30px; }
+#zs-bar.zs-bar-anchored.zs-prov-chatgpt,
+#zs-bar.zs-bar-anchored.zs-prov-claude,
+#zs-bar.zs-bar-anchored.zs-prov-grok,
+#zs-bar.zs-bar-anchored.zs-prov-mistral { padding-left: 22px; padding-right: 22px; }
 
 #zs-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; cursor: help; }
 #zs-dot.on { background: #34d399; box-shadow: 0 0 8px #34d399; }
@@ -232,6 +233,24 @@ html.zs-light #zs-unstable {
   box-shadow: 0 2px 12px rgba(217, 119, 6, 0.45);
 }
 #zs-action[data-kind="start-degraded"]:hover { filter: brightness(1.08); }
+#zs-action[data-kind="newchat"] {
+  background: rgba(99, 102, 241, 0.16);
+  color: #c7d2fe;
+  border-color: rgba(129, 140, 248, 0.35);
+}
+#zs-action[data-kind="newchat"]:hover {
+  background: rgba(99, 102, 241, 0.28);
+  color: #ffffff;
+}
+html.zs-light #zs-action[data-kind="newchat"] {
+  background: rgba(79, 70, 229, 0.10);
+  color: #4338ca;
+  border-color: rgba(79, 70, 229, 0.28);
+}
+html.zs-light #zs-action[data-kind="newchat"]:hover {
+  background: rgba(79, 70, 229, 0.18);
+  color: #312e81;
+}
 #zs-action:disabled {
   background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.45);
   border-color: rgba(255, 255, 255, 0.10); box-shadow: none; cursor: not-allowed;

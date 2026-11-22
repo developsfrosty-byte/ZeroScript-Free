@@ -41,14 +41,17 @@ EXT_DIR = os.path.join(HERE, "zeroscript-extension")
 ICON_PATH = os.path.join(HERE, "assets", "icon.png")
 
 AI_PROVIDERS = [
-    {"id": "deepseek", "name": "DeepSeek", "url": "https://chat.deepseek.com/", "tag": "Recommended", "vision": True, "desc": "Unified model with reasoning and screenshots."},
-    {"id": "chatgpt", "name": "ChatGPT", "url": "https://chatgpt.com/", "tag": "Popular", "vision": False, "desc": "GPT-5/o-series with CodeMirror & context persistence."},
-    {"id": "gemini", "name": "Google Gemini", "url": "https://gemini.google.com/app", "tag": "Vision", "vision": True, "desc": "Multimodal Gemini with live Studio screenshots."},
-    {"id": "kimi", "name": "Kimi", "url": "https://www.kimi.ai/", "tag": "Agentic", "vision": True, "desc": "Moonshot AI with strong tool execution."},
-    {"id": "glm", "name": "GLM (Z.ai)", "url": "https://chat.z.ai/", "tag": "Multimodal", "vision": True, "desc": "Zhipu GLM with deep code and vision support."},
-    {"id": "qwen", "name": "Qwen", "url": "https://chat.qwen.ai/", "tag": "Fast", "vision": True, "desc": "Alibaba Qwen with fast structured command output."},
-    {"id": "arena", "name": "Arena", "url": "https://arena.ai/text/direct", "tag": "Multi-model", "vision": True, "desc": "Direct mode access to frontier models."},
-    {"id": "meta", "name": "Meta AI", "url": "https://www.meta.ai/", "tag": "Vision", "vision": True, "desc": "Llama playground with image & Studio support."},
+    {"id": "claude", "name": "Claude", "url": "https://claude.ai/new", "tag": "New · Coding", "category": "Coding", "vision": True, "badge": "CL", "color": "#d97757", "desc": "Anthropic Claude for ultra-clean Luau architecture and multi-step UI edits."},
+    {"id": "deepseek", "name": "DeepSeek", "url": "https://chat.deepseek.com/", "tag": "Recommended", "category": "Coding", "vision": True, "badge": "DS", "color": "#4f7cff", "desc": "Unified reasoning model with live screenshots and rock-solid command output."},
+    {"id": "chatgpt", "name": "ChatGPT", "url": "https://chatgpt.com/", "tag": "Popular", "category": "Coding", "vision": False, "badge": "OA", "color": "#10a37f", "desc": "OpenAI GPT-5/o-series with CodeMirror reading, amnesia recovery, and persistence."},
+    {"id": "gemini", "name": "Google Gemini", "url": "https://gemini.google.com/app", "tag": "Vision", "category": "Vision", "vision": True, "badge": "GM", "color": "#60a5fa", "desc": "Multimodal Gemini with Studio screenshots and automatic prompt refresh."},
+    {"id": "grok", "name": "Grok", "url": "https://grok.com/", "tag": "New · Fast", "category": "Fast", "vision": True, "badge": "GK", "color": "#e5e7eb", "desc": "xAI Grok with fast streaming responses, vision screenshots, and Studio execution."},
+    {"id": "mistral", "name": "Mistral Le Chat", "url": "https://chat.mistral.ai/chat", "tag": "New · Coding", "category": "Fast", "vision": True, "badge": "MS", "color": "#fb923c", "desc": "Fast Mistral coding & reasoning agent wired directly to Roblox Studio."},
+    {"id": "kimi", "name": "Kimi", "url": "https://www.kimi.ai/", "tag": "Agentic", "category": "Coding", "vision": True, "badge": "KM", "color": "#38bdf8", "desc": "Moonshot AI with strong multi-step tool execution and vision support."},
+    {"id": "glm", "name": "GLM (Z.ai)", "url": "https://chat.z.ai/", "tag": "Multimodal", "category": "Vision", "vision": True, "badge": "GL", "color": "#a78bfa", "desc": "Zhipu GLM with deep code understanding and vision capabilities."},
+    {"id": "qwen", "name": "Qwen", "url": "https://chat.qwen.ai/", "tag": "Fast", "category": "Fast", "vision": True, "badge": "QW", "color": "#818cf8", "desc": "Alibaba Qwen with high-speed structured Luau & JSON tool output."},
+    {"id": "arena", "name": "Arena", "url": "https://arena.ai/text/direct", "tag": "Multi-model", "category": "Multi-model", "vision": True, "badge": "AR", "color": "#f472b6", "desc": "Direct-mode access to top frontier models in one place (all Arena domains supported)."},
+    {"id": "meta", "name": "Meta AI", "url": "https://www.meta.ai/", "tag": "Vision", "category": "Vision", "vision": True, "badge": "MA", "color": "#3b82f6", "desc": "Llama playground with image & Studio integration."},
 ]
 
 _bridge_loop = None
@@ -109,6 +112,117 @@ def _run_on_bridge_loop(coro, timeout=10.0):
         return None
 
 
+def _read_manifest_version():
+    try:
+        mpath = os.path.join(EXT_DIR, "manifest.json")
+        if os.path.isfile(mpath):
+            with open(mpath, "r", encoding="utf-8") as f:
+                return str(json.load(f).get("version") or "")
+    except Exception:
+        pass
+    return ""
+
+
+def _build_diagnostics_payload():
+    checks = []
+    # 1. Local Bridge & WebSocket
+    checks.append({
+        "id": "bridge",
+        "title": "Local WebSocket Bridge",
+        "status": "ok" if _bridge_ready else "warn",
+        "detail": f"Listening on ws://{bridge.HOST}:{bridge.PORT} ({len(bridge.clients)} connected browser tab(s))"
+        if _bridge_ready else "Bridge thread starting up...",
+    })
+
+    # 2. Extension Version Match
+    ext_ver = _read_manifest_version()
+    ver_match = bool(ext_ver) and ext_ver == bridge.BRIDGE_VERSION
+    checks.append({
+        "id": "extension",
+        "title": "Chrome Extension Folder",
+        "status": "ok" if ver_match else "warn",
+        "detail": f"zeroscript-extension v{ext_ver or '?'} matches bridge v{bridge.BRIDGE_VERSION}. Remember to click Reload (↻) in edge://extensions or chrome://extensions."
+        if ver_match else f"Extension version ({ext_ver or 'missing'}) differs from bridge ({bridge.BRIDGE_VERSION}).",
+    })
+
+    # 3. StudioMCP.exe binary
+    mcp_exe = bridge._current_studio_exe()
+    checks.append({
+        "id": "studiomcp",
+        "title": "Roblox StudioMCP Binary",
+        "status": "ok" if mcp_exe else "warn",
+        "detail": str(mcp_exe) if mcp_exe else "StudioMCP.exe not found in default Roblox Versions directory.",
+    })
+
+    # 4. Port 13469 owner & Studio process
+    proc_up = bridge._roblox_studio_app_running()
+    owner = bridge._port_owner(bridge.STUDIO_MCP_PORT)
+    if owner:
+        pid, name, path = owner
+        low_n = (name or "").lower()
+        low_p = (path or "").lower()
+        if "studiomcp" in low_n or "roblox" in low_n or "roblox" in low_p:
+            checks.append({
+                "id": "port13469",
+                "title": f"Studio MCP Port ({bridge.STUDIO_MCP_PORT})",
+                "status": "ok",
+                "detail": f"Owned by {name} (PID {pid}). No port conflict detected.",
+            })
+        else:
+            checks.append({
+                "id": "port13469",
+                "title": f"Studio MCP Port ({bridge.STUDIO_MCP_PORT})",
+                "status": "fail",
+                "detail": f"Conflict: port {bridge.STUDIO_MCP_PORT} is held by '{name}' (PID {pid}). Close that app or disable other Quick Connect clients.",
+            })
+    else:
+        checks.append({
+            "id": "port13469",
+            "title": f"Studio MCP Port ({bridge.STUDIO_MCP_PORT})",
+            "status": "warn",
+            "detail": f"Port {bridge.STUDIO_MCP_PORT} is free (waiting for Studio / StudioMCP registration).",
+        })
+
+    # 5. Live Studio & Place status
+    with _studio_lock:
+        place = _studio_cache["place"]
+        app_ok = _studio_cache["app"]
+    tools_n = len(bridge.mgr.list_tools())
+    if place is True and tools_n > 0:
+        st_status = "ok"
+        st_detail = f"Roblox Studio place attached and ready ({tools_n} live commands)."
+    elif app_ok is True:
+        st_status = "warn"
+        st_detail = "Roblox Studio is connected, but no place is open."
+    elif proc_up is True:
+        st_status = "warn"
+        st_detail = "Roblox Studio is running — open Assistant Settings > MCP Servers and toggle 'Enable Studio as MCP server'."
+    else:
+        st_status = "warn"
+        st_detail = "Roblox Studio is not running yet."
+    checks.append({
+        "id": "studio",
+        "title": "Roblox Studio Place Link",
+        "status": st_status,
+        "detail": st_detail,
+    })
+
+    # 6. Skills & Providers summary
+    enabled_skills = sum(1 for sk in skills_manager.list_summary() if sk.get("enabled"))
+    checks.append({
+        "id": "skills",
+        "title": "Agent Playbooks & Providers",
+        "status": "ok" if enabled_skills > 0 else "warn",
+        "detail": f"{enabled_skills} active skill playbook(s) synced across {len(AI_PROVIDERS)} AI providers.",
+    })
+
+    return {
+        "ok": True,
+        "ts": time.strftime("%H:%M:%S"),
+        "checks": checks,
+    }
+
+
 def _build_status_payload(force_probe=False):
     if force_probe:
         _run_studio_probe_sync()
@@ -150,12 +264,16 @@ def _build_status_payload(force_probe=False):
             "port": bridge.PORT,
             "clients": len(bridge.clients),
             "version": bridge.BRIDGE_VERSION,
+            "extensionVersion": _read_manifest_version(),
             "uptime": max(0, int(time.time() - bridge.START_TIME)),
         },
         "studio": st_snap,
         "servers": servers,
         "tools": tools,
         "skills": skills_manager.list_summary(),
+        "presets": skills_manager.list_presets(),
+        "starterPrompts": skills_manager.BUILTIN_STARTER_PROMPTS,
+        "activityStats": bridge.get_activity().get("stats", {}),
         "providers": AI_PROVIDERS,
         "settings": skills_manager.load_settings(),
         "paths": {
@@ -321,6 +439,12 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/settings":
             return self._send_json(200, {"ok": True, "settings": skills_manager.load_settings()})
 
+        if path == "/api/activity":
+            return self._send_json(200, {"ok": True, **bridge.get_activity()})
+
+        if path == "/api/diagnostics":
+            return self._send_json(200, _build_diagnostics_payload())
+
         return self._send_json(404, {"ok": False, "error": f"unknown route: {path}"})
 
     def do_POST(self):
@@ -401,8 +525,37 @@ class AppHandler(BaseHTTPRequestHandler):
             _run_on_bridge_loop(bridge.broadcast_status(), timeout=6.0)
             return self._send_json(200, {"ok": True, "skills": skills_manager.list_skills(include_content=True)})
 
+        if path == "/api/skills/preset":
+            pid = body.get("preset") or body.get("id")
+            ok, res = skills_manager.apply_preset(pid)
+            if not ok:
+                return self._send_json(400, {"ok": False, "error": res})
+            bridge.log(f"skill preset applied: {res['id']}", "cy")
+            _run_on_bridge_loop(bridge.broadcast_status(), timeout=6.0)
+            return self._send_json(200, {"ok": True, "preset": res, "skills": skills_manager.list_skills(include_content=True)})
+
+        if path == "/api/activity/clear":
+            return self._send_json(200, {"ok": True, **bridge.clear_activity()})
+
+        if path == "/api/prompts/save":
+            ok, res = skills_manager.save_custom_prompt(body)
+            if not ok:
+                return self._send_json(400, {"ok": False, "error": res})
+            return self._send_json(200, {"ok": True, "customPrompts": res, "settings": skills_manager.load_settings()})
+
+        if path == "/api/prompts/delete":
+            pid = body.get("id")
+            ok, res = skills_manager.delete_custom_prompt(pid)
+            if not ok:
+                return self._send_json(404, {"ok": False, "error": res})
+            return self._send_json(200, {"ok": True, "customPrompts": res, "settings": skills_manager.load_settings()})
+
         if path == "/api/settings":
+            old_gp = skills_manager.load_settings().get("globalPrompt", "")
             cfg = skills_manager.save_settings(body)
+            if cfg.get("globalPrompt", "") != old_gp:
+                bridge.log("global prompt updated and synced to extensions", "cy")
+                _run_on_bridge_loop(bridge.broadcast_status(), timeout=6.0)
             return self._send_json(200, {"ok": True, "settings": cfg})
 
         if path == "/api/open_url":

@@ -12,10 +12,120 @@ BUILTIN_ORDER = {
     "ui-craftsmanship": 0,
     "building-architecture": 1,
     "cutscenes-cinematics": 2,
+    "combat-vfx-gamefeel": 3,
+    "luau-architecture-networking": 4,
+    "npc-ai-pathfinding": 5,
+    "lighting-atmosphere-audio": 6,
+    "economy-progression-loops": 7,
+    "performance-optimization": 8,
 }
 
-VALID_CATEGORIES = ("UI", "Building", "Cutscenes", "Custom")
+VALID_CATEGORIES = (
+    "UI",
+    "Building",
+    "Cutscenes",
+    "Combat & VFX",
+    "Scripting",
+    "Gameplay",
+    "Polish",
+    "Optimization",
+    "Custom",
+)
 VALID_MODES = ("auto", "always")
+VALID_ACCENTS = ("indigo", "cyan", "emerald", "amber", "crimson")
+
+SKILL_PRESETS = [
+    {
+        "id": "all-rounder",
+        "name": "Full AAA Stack",
+        "desc": "Enable all 9 specialized playbooks across UI, architecture, combat, AI, lighting, economy, and performance.",
+        "skills": list(BUILTIN_ORDER.keys()),
+    },
+    {
+        "id": "action-combat",
+        "name": "Action & Combat",
+        "desc": "Best for RPGs, anime fighters, and wave games (Combat VFX, NPC Boss AI, UI, Networking, Lighting, Optimization).",
+        "skills": [
+            "ui-craftsmanship",
+            "combat-vfx-gamefeel",
+            "npc-ai-pathfinding",
+            "luau-architecture-networking",
+            "lighting-atmosphere-audio",
+            "performance-optimization",
+        ],
+    },
+    {
+        "id": "world-cinematics",
+        "name": "Worlds & Cutscenes",
+        "desc": "Best for showcase maps, lobbies, and story games (3D Architecture, Future Lighting & Audio, Cutscenes, Optimization).",
+        "skills": [
+            "building-architecture",
+            "lighting-atmosphere-audio",
+            "cutscenes-cinematics",
+            "performance-optimization",
+        ],
+    },
+    {
+        "id": "simulator-tycoon",
+        "name": "Simulator & Tycoon",
+        "desc": "Best for economy loops, shops, upgrades, and persistent progression (Economy, UI, Networking/DataStore, Optimization).",
+        "skills": [
+            "ui-craftsmanship",
+            "economy-progression-loops",
+            "luau-architecture-networking",
+            "performance-optimization",
+        ],
+    },
+    {
+        "id": "minimal-fast",
+        "name": "Core Coding Only",
+        "desc": "Lean setup keeping only UI, Luau architecture/DataStore, and performance playbooks active.",
+        "skills": [
+            "ui-craftsmanship",
+            "luau-architecture-networking",
+            "performance-optimization",
+        ],
+    },
+]
+
+BUILTIN_STARTER_PROMPTS = [
+    {
+        "id": "rpg-hud-inventory",
+        "title": "Animated Obsidian RPG HUD & Inventory",
+        "category": "UI",
+        "text": "Read the ui-craftsmanship skill first. Build a modern obsidian-glass RPG HUD in StarterGui (health/mana bars, hotbar, quests tracker) plus a toggleable Inventory modal with CanvasGroup fade/pop tweens, UIScale hover feedback, and a modular LocalScript.",
+    },
+    {
+        "id": "melee-combat-system",
+        "title": "3-Hit Sword Combat with Hitstop & VFX",
+        "category": "Combat & VFX",
+        "text": "Read combat-vfx-gamefeel and luau-architecture-networking skills first. Implement a 3-hit M1 sword combo using client swing prediction, server Workspace:GetPartBoundsInBox validation, cooldown checks, hitstop, knockback, and trauma camera shake.",
+    },
+    {
+        "id": "boss-ai-encounter",
+        "title": "Multi-Phase Boss NPC with Telegraphed Attacks",
+        "category": "Gameplay",
+        "text": "Read npc-ai-pathfinding and lighting-atmosphere-audio first. Build an FSM Boss AI module in ServerScriptService with async PathfindingService chase, spawn leash, Phase 2 (<50% HP) enrage, and telegraphed ground-ring AoE slams.",
+    },
+    {
+        "id": "stylized-hub-map",
+        "title": "Detailed Plaza Hub with Future Lighting",
+        "category": "Building",
+        "text": "Read building-architecture and lighting-atmosphere-audio skills first. Build a 3-layer detailed medieval/sci-fi spawn plaza Model in Workspace with zero Z-fighting CFrame math, recessed windows, props, Future lighting, Atmosphere, Bloom, and spatial audio.",
+    },
+    {
+        "id": "economy-datastore-loop",
+        "title": "Zero-Trust Shop, Economy & DataStore",
+        "category": "Scripting",
+        "text": "Read economy-progression-loops and luau-architecture-networking first. Set up ReplicatedStorage.Shared.Catalog, server-authoritative ShopService + DataService using UpdateAsync retries + BindToClose, and a synchronized client shop controller.",
+    },
+    {
+        "id": "cinematic-boss-intro",
+        "title": "Boss Reveal Spline Cutscene + Skip HUD",
+        "category": "Cutscenes",
+        "text": "Read cutscenes-cinematics skill first. Build a CutsceneDirector ModuleScript in ReplicatedStorage with Catmull-Rom spline camera motion, DepthOfField focus pulls, 2.35:1 letterbox bars, subtitle beats, Skip button, and zero-softlock cleanup().",
+    },
+]
 
 
 def _ensure_skills_dir():
@@ -302,13 +412,59 @@ def delete_skill(skill_id):
         return False, str(e)
 
 
+def list_presets():
+    return [dict(p) for p in SKILL_PRESETS]
+
+
+def apply_preset(preset_id):
+    pid = _slugify(preset_id)
+    preset = next((p for p in SKILL_PRESETS if p["id"] == pid), None)
+    if not preset:
+        return False, f"unknown preset '{preset_id}'"
+    wanted = set(preset["skills"])
+    for sk in list_skills(include_content=True):
+        if sk.get("builtin"):
+            target_enabled = sk["id"] in wanted
+            if bool(sk.get("enabled")) != target_enabled:
+                ok, err = toggle_skill(sk["id"], enabled=target_enabled)
+                if not ok:
+                    return False, err
+    return True, preset
+
+
 def default_settings():
     return {
         "userName": os.environ.get("USERNAME") or os.environ.get("USER") or "Builder",
         "minimizeToTray": True,
         "autoOpenWindow": True,
         "appPort": int(os.environ.get("ZS_APP_PORT", "17614")),
+        "accentTheme": "indigo",
+        "ambientMotion": True,
+        "favoriteProviders": ["claude", "deepseek", "gemini"],
+        "globalPrompt": "",
+        "customPrompts": [],
     }
+
+
+def _clean_prompts(raw):
+    out = []
+    if not isinstance(raw, list):
+        return out
+    seen = set()
+    for item in raw[:64]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()[:80]
+        text = str(item.get("text") or "").replace("\r\n", "\n").strip()[:4000]
+        if not title or not text:
+            continue
+        pid = _slugify(item.get("id") or title)
+        while pid in seen:
+            pid = f"{pid[:58]}-x"
+        seen.add(pid)
+        cat = str(item.get("category") or "Custom").strip()[:32] or "Custom"
+        out.append({"id": pid, "title": title, "category": cat, "text": text})
+    return out
 
 
 def load_settings():
@@ -326,6 +482,18 @@ def load_settings():
                     cfg["autoOpenWindow"] = saved["autoOpenWindow"]
                 if isinstance(saved.get("appPort"), int) and 1024 <= saved["appPort"] <= 65535:
                     cfg["appPort"] = saved["appPort"]
+                if isinstance(saved.get("accentTheme"), str) and saved["accentTheme"].strip().lower() in VALID_ACCENTS:
+                    cfg["accentTheme"] = saved["accentTheme"].strip().lower()
+                if isinstance(saved.get("ambientMotion"), bool):
+                    cfg["ambientMotion"] = saved["ambientMotion"]
+                if isinstance(saved.get("favoriteProviders"), list):
+                    cfg["favoriteProviders"] = [
+                        _slugify(x) for x in saved["favoriteProviders"][:12] if isinstance(x, str) and x.strip()
+                    ]
+                if isinstance(saved.get("globalPrompt"), str):
+                    cfg["globalPrompt"] = saved["globalPrompt"].replace("\r\n", "\n").strip()[:8000]
+                if isinstance(saved.get("customPrompts"), list):
+                    cfg["customPrompts"] = _clean_prompts(saved["customPrompts"])
         except Exception:
             pass
     return cfg
@@ -349,6 +517,53 @@ def save_settings(patch):
                     cfg["appPort"] = p
             except Exception:
                 pass
+        if "accentTheme" in patch and isinstance(patch["accentTheme"], str):
+            th = patch["accentTheme"].strip().lower()
+            if th in VALID_ACCENTS:
+                cfg["accentTheme"] = th
+        if "ambientMotion" in patch:
+            cfg["ambientMotion"] = _parse_bool(patch["ambientMotion"], default=cfg["ambientMotion"])
+        if "favoriteProviders" in patch and isinstance(patch["favoriteProviders"], list):
+            cfg["favoriteProviders"] = [
+                _slugify(x) for x in patch["favoriteProviders"][:12] if isinstance(x, str) and x.strip()
+            ]
+        if "globalPrompt" in patch and isinstance(patch["globalPrompt"], str):
+            cfg["globalPrompt"] = patch["globalPrompt"].replace("\r\n", "\n").strip()[:8000]
+        if "customPrompts" in patch and isinstance(patch["customPrompts"], list):
+            cfg["customPrompts"] = _clean_prompts(patch["customPrompts"])
     _atomic_write(SETTINGS_PATH, json.dumps(cfg, indent=2) + "\n")
     return cfg
+
+
+def save_custom_prompt(data):
+    if not isinstance(data, dict):
+        return False, "invalid prompt payload"
+    title = str(data.get("title") or "").strip()[:80]
+    text = str(data.get("text") or "").replace("\r\n", "\n").strip()[:4000]
+    cat = str(data.get("category") or "Custom").strip()[:32] or "Custom"
+    if not title:
+        return False, "prompt title is required"
+    if not text:
+        return False, "prompt text is required"
+    cfg = load_settings()
+    prompts = list(cfg.get("customPrompts") or [])
+    pid = _slugify(data.get("id") or title)
+    entry = {"id": pid, "title": title, "category": cat, "text": text}
+    idx = next((i for i, p in enumerate(prompts) if p["id"] == pid), None)
+    if idx is not None:
+        prompts[idx] = entry
+    else:
+        prompts.insert(0, entry)
+    saved = save_settings({"customPrompts": prompts})
+    return True, saved["customPrompts"]
+
+
+def delete_custom_prompt(prompt_id):
+    pid = _slugify(prompt_id)
+    cfg = load_settings()
+    prompts = [p for p in (cfg.get("customPrompts") or []) if p["id"] != pid]
+    if len(prompts) == len(cfg.get("customPrompts") or []):
+        return False, f"prompt '{prompt_id}' not found"
+    saved = save_settings({"customPrompts": prompts})
+    return True, saved["customPrompts"]
 

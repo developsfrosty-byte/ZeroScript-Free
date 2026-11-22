@@ -103,8 +103,11 @@
   // content_scripts and background.js PROVIDER_URLS when adding a provider.
   const AI_SITES = [
     { name: "DeepSeek", url: "https://chat.deepseek.com/" },
+    { name: "Claude", url: "https://claude.ai/new" },
     { name: "ChatGPT", url: "https://chatgpt.com/" },
     { name: "Gemini", url: "https://gemini.google.com/app" },
+    { name: "Grok", url: "https://grok.com/" },
+    { name: "Mistral", url: "https://chat.mistral.ai/chat" },
     { name: "Kimi", url: "https://www.kimi.ai/" },
     { name: "GLM", url: "https://chat.z.ai/" },
     { name: "Qwen", url: "https://chat.qwen.ai/" },
@@ -1698,9 +1701,12 @@
   // definition, used both by the bootstrap and by the periodic re-injection, so
   // the two can never drift apart.
   function systemPrompt() {
+    const globalPrompt = ((A.bridge && A.bridge.globalPrompt) || "").trim();
+    const localPrompt = (ui.getCustomPrompt() || "").trim();
+    const combinedCustom = [globalPrompt, localPrompt].filter(Boolean).join("\n\n");
     return ZS.buildSystemPrompt({
       siteName: P.displayName,
-      customPrompt: ui.getCustomPrompt(),
+      customPrompt: combinedCustom,
       providerNotes: P.promptExtra || "",
       skills: (A.bridge && A.bridge.skills) || [],
     });
@@ -1901,7 +1907,7 @@
       if (!alive()) return;
       if (!A.toolList.length) {
         ui.banner("warn", "Bridge or Studio offline",
-          "Could not fetch Roblox tools. Run start.bat and make sure Roblox Studio is open, then try again.");
+          "Could not fetch Roblox tools. Launch ZeroScript.vbs (desktop app) and make sure Roblox Studio is open, then try again.");
         return;
       }
       const modeState = await P.ensureComposerReady("startup");
@@ -2686,9 +2692,19 @@
 
     // The primary button does different things depending on the current state
     // (set by renderBar via actionBtn.dataset.kind).
-    function onActionClick() {
+    async function onActionClick() {
       const kind = actionBtn.dataset.kind;
-      if (kind === "start" || kind === "start-degraded") startSession();
+      if (kind === "start" || kind === "start-degraded") { startSession(); return; }
+      if (kind === "newchat") {
+        let moved = false;
+        if (P.openNewChat) {
+          try { moved = !!(await P.openNewChat()); } catch {}
+        }
+        if (!moved) {
+          const site = AI_SITES.find((s) => s.name.toLowerCase() === (P.displayName || "").toLowerCase());
+          if (site) location.assign(site.url);
+        }
+      }
     }
 
     // ── Custom prompt (persisted) ───────────────────────────────────────────
@@ -2951,8 +2967,8 @@
         `<div id="zs-setup-head"><span id="zs-setup-logo">ZeroScript</span><span id="zs-setup-tag">Setup</span></div>` +
         `<div id="zs-setup-sub">The <b>Bridge</b> is what connects this chat to Roblox Studio. Three steps and you're running.</div>` +
         `<ol id="zs-setup-steps">` +
-          `<li>Download the Bridge from GitHub</li>` +
-          `<li>Run <code>start.bat</code></li>` +
+          `<li>Download ZeroScript from GitHub</li>` +
+          `<li>Open <code>ZeroScript.vbs</code></li>` +
           `<li>Back here, click <b>Start Roblox agent</b></li>` +
         `</ol>` +
         `<div class="zs-setup-copy-row">` +
@@ -3063,7 +3079,7 @@
           // without this check the bridge dropping fell through to the
           // stale "N tools" text below, reading as if nothing was wrong.
           toneClass = "warn"; warn = true;
-          msg = `<b>Agent active</b> · bridge offline, run start.bat`;
+          msg = `<b>Agent active</b> · bridge offline, open ZeroScript.vbs`;
         } else if ((placeDown || appDown || studioDown) && addonOk) {
           // DEGRADED session by CHOICE: the user started the agent with Roblox
           // down but other MCP server(s) alive (the "Start agent (Roblox
@@ -3107,7 +3123,7 @@
           // unavailable until Studio is back. Button enabled, but visibly warned.
           toneClass = "warn"; warn = true;
           msg = !A.bridge.connected
-            ? `Run <b>start.bat</b> on your PC.`
+            ? `Open <b>ZeroScript.vbs</b> on your PC.`
             : studioProcUp
               ? `<b>Studio open but not connected</b> - open <b>Assistant Settings &gt; MCP Servers</b> in Studio, or start without it.`
               : `<b>Roblox Studio offline</b> - start with your other MCP server(s).`;
@@ -3115,7 +3131,7 @@
         } else {
           toneClass = "warn"; warn = true;
           msg = !A.bridge.connected
-            ? `Run <b>start.bat</b> on your PC.`
+            ? `Open <b>ZeroScript.vbs</b> on your PC.`
             : placeDown
               ? `Open a <b>place</b> in Roblox Studio.`
               : (appDown || studioDown) && studioProcUp
@@ -3130,7 +3146,8 @@
         disabled = !bridgeOk && !addonOk;
       } else {
         toneClass = "noagent";
-        msg = `No agent here. Open a new chat to start one.`;
+        msg = `Existing chat · no agent here.`;
+        label = "＋ New agent chat"; kind = "newchat"; disabled = false;
       }
       // Parked on visibility: the loop is alive but deliberately frozen because
       // this tab is not the foreground tab of its window. Say so explicitly -
@@ -3234,7 +3251,7 @@
       // Assistant Settings > MCP Servers inside the already-open Studio.
       const procUp = s.studioProc === true;
       let txt;
-      if (!s.connected) txt = "Bridge offline, run start.bat";
+      if (!s.connected) txt = "Bridge offline — open ZeroScript.vbs";
       else if (!mcpOk) txt = "Bridge OK, open Roblox Studio";
       else if (noPlace) txt = "Roblox Studio is open but no place is loaded - open a place";
       else if (noApp) txt = procUp
@@ -3306,7 +3323,7 @@
         ? `<a class="zs-banner-video" href="${VIDEO_URL}" target="_blank" rel="noopener">▶︎ Watch setup tutorial</a>`
         : "";
       b.innerHTML = `<div class="zs-banner-t">⚠ Lost connection to ZeroScript</div>
-        <div class="zs-banner-m">The ZeroScript bridge stopped on your PC. Restart it (run start.bat and keep Roblox Studio open): the agent will reconnect automatically as soon as it is detected again.</div>
+        <div class="zs-banner-m">The ZeroScript bridge stopped on your PC. Open ZeroScript.vbs and keep Roblox Studio open: the agent will reconnect automatically as soon as it is detected again.</div>
         <div class="zs-banner-acts">${videoLink}<button class="zs-banner-x">Close</button></div>`;
       b.querySelector(".zs-banner-x").addEventListener("click", () => { b.remove(); if (bridgeBannerEl === b) bridgeBannerEl = null; });
       root.appendChild(b);
@@ -3459,6 +3476,9 @@
       // so the panel reappears on the very next frame.
       if (root && !root.isConnected) {
         try { document.documentElement.appendChild(root); } catch {}
+      }
+      if (bar && !bar.isConnected && root) {
+        try { root.appendChild(bar); } catch {}
       }
 
       // The instability warning floats just ABOVE the bar (not inside it), so it
@@ -4087,7 +4107,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.type === "zs-status") {
-      ui.setStatus({ connected: msg.connected, mcpAlive: msg.mcpAlive, studio: msg.studio, studioApp: msg.studioApp, studioProc: msg.studioProc, tools: msg.tools, servers: msg.servers, skills: msg.skills });
+      ui.setStatus({ connected: msg.connected, mcpAlive: msg.mcpAlive, studio: msg.studio, studioApp: msg.studioApp, studioProc: msg.studioProc, tools: msg.tools, servers: msg.servers, skills: msg.skills, globalPrompt: msg.globalPrompt });
     }
     if (msg && msg.type === "zs-open-menu") {
       ui.openMenu(false); // from the popup's Settings button — opens at the top (Switch AI / custom prompt)

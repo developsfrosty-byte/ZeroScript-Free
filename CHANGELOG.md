@@ -2,6 +2,31 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.7.0] - 2026-11-22
+
+### Added
+- **3 New AI Chat Providers (`zeroscript-extension/providers/`):** Full ZeroScript Studio integration for **Claude** (`claude.ai`, `claude.js`), **Grok** (`grok.com`, `grok.js`), and **Mistral Le Chat** (`chat.mistral.ai`, `mistral.js`), bringing total supported providers to **11**.
+- **6 New AAA Developer Skill Playbooks (`skills/`):**
+  - **Combat Systems, VFX & Game Feel** (`combat-vfx-gamefeel`)
+  - **Luau Architecture, Networking & DataStore** (`luau-architecture-networking`)
+  - **NPC AI, Pathfinding & Boss Systems** (`npc-ai-pathfinding`)
+  - **Lighting, Atmosphere & Spatial Audio** (`lighting-atmosphere-audio`)
+  - **Economy, Shops & Progression Loops** (`economy-progression-loops`)
+  - **Performance, Replication & Mobile Optimization** (`performance-optimization`)
+- **Modernized ZeroScript Desktop App (`app_ui/` + `app.py` + `bridge.py`):**
+  - Modern 2026 dark glassmorphism studio redesign (`Plus Jakarta Sans` + `Inter` + `JetBrains Mono`), live data-flow pipeline visualization, pinned favorite AI quick-launch strip, and 5 selectable accent themes (`Indigo`, `Cyan`, `Emerald`, `Amber`, `Crimson`).
+  - **Live Activity Inspector:** Real-time MCP tool call stream showing status, server, execution latency, arguments, and output previews (`/api/activity`).
+  - **Prompt Studio + Global Rules Sync:** Always-on Global Studio Instructions synced live across all 11 AI tabs, plus 6 AAA Starter Prompts and a custom reusable Prompt Library.
+  - **System Health Doctor:** One-click live check across WebSocket bridge, Chrome extension version parity, `StudioMCP.exe` discovery, and port `13469` conflict detection (`/api/diagnostics`).
+  - **Skill Preset Packs & Markdown Import/Export:** 5 one-click loadout presets plus `.md` skill import/export.
+  - **`Ctrl+K` Command Palette:** Instant keyboard jump across tabs, AI launches, skill toggles, presets, and quick actions.
+
+### Fixed
+- **ChatGPT & Arena Missing Start Button:**
+  - Switched `chatgpt.js` from mounting `#zs-bar` inside ChatGPT's React CSS Grid (`barMount`) to safe `barAnchor()` rendering outside React's DOM inside `#zs-root`, added visibility-aware `getEditor()` scanning with `<textarea>` fallback handling, added `if (!bar.isConnected && root)` self-healing in `core/main.js`, and added `www.chatgpt.com` to `manifest.json` and `background.js`.
+  - Fixed `arena.js` across all Arena domains (`arena.ai`, `www.arena.ai`, `lmarena.ai`, `www.lmarena.ai`, `beta.lmarena.ai`, `chat.lmsys.org`), added multi-selector visible `getEditor()` supporting both `<textarea>` and TipTap/ProseMirror `contenteditable`, fixed `barAnchor()` picking small rounded icons, prevented non-modal `[role="dialog"]` popovers from hiding the bar in `overlayBlocking()`, fixed `conversationKey()`/`isFreshChat()` on `/`, added `openNewChat()`, and added `if (!e.isTrusted) return;` in `installSendHooks()`.
+  - Added an actionable **`＋ New agent chat`** button when viewing an existing non-agent conversation so the bar is never stuck without a button.
+
 ## [1.6.0] - 2026-11-21
 
 ### Added

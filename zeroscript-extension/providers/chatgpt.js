@@ -224,10 +224,36 @@ const ZSProvider = (() => {
   const assistantItems = () => allItems().filter(isAssistantItem);
   const assistantCount = () => assistantItems().length;
   const userCount = () => allItems().filter(isUserItem).length;
-  const getEditor = () => document.querySelector(S.editor);
+  function isVisibleBox(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (!el.getBoundingClientRect) return true; // test stub compatibility
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    try {
+      const st = getComputedStyle(el);
+      if (st.display === "none" || st.visibility === "hidden") return false;
+    } catch {}
+    return true;
+  }
+  const EDITOR_SELS = [
+    "#prompt-textarea",
+    'div.ProseMirror[contenteditable="true"]',
+    'form [contenteditable="true"][role="textbox"]',
+    'form textarea:not([aria-hidden="true"])',
+    '[data-testid="prompt-textarea"]',
+  ];
+  const getEditor = () => {
+    for (const sel of EDITOR_SELS) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisibleBox(el)) return el;
+      }
+    }
+    return document.querySelector(S.editor);
+  };
   const editorText = () => {
     const e = getEditor();
-    return e ? e.textContent || "" : "";
+    if (!e) return "";
+    return e.tagName === "TEXTAREA" ? (e.value || "") : (e.textContent || "");
   };
 
   const lastAssistant = () => {
@@ -249,11 +275,10 @@ const ZSProvider = (() => {
   const lastAssistantId = () => itemKey(lastAssistant());
 
   const chatIsEmpty = () => allItems().length === 0;
-  // A genuinely fresh chat: the "/" route (a conversation is /c/<id>), composer
-  // rendered, no turns. An existing conversation that is still loading has a
-  // /c/<id> path, so it never gates.
+  // Treat any empty chat outside an existing /c/<id> conversation as fresh
+  // and startable (covers "/", Projects /g/<id>, and temporary chats).
   const isFreshChat = () =>
-    chatIsEmpty() && location.pathname === "/" && !!getEditor();
+    chatIsEmpty() && !/\/c\/[^/]+/.test(location.pathname) && !!getEditor();
 
   // The composer box the Start gate hides as one unit (the form around the editor).
   const composerFrame = () => {
@@ -292,56 +317,34 @@ const ZSProvider = (() => {
   // template so the next rename costs an inline style, not a broken composer.
   // Both templates put the full-width, empty-by-default row FIRST, which is the
   // slot we want.
-  function topArea(box) {
-    try {
-      const t = getComputedStyle(box).gridTemplateAreas || "";
-      const first = t.match(/"([^"]+)"/);
-      // Only a first row that is ONE area edge to edge is safe to claim blindly
-      // (spelled "eyebrow" today, "header header header" before) - a top row
-      // genuinely split between several areas is not a banner slot, so leave the
-      // CSS be rather than steal a column.
-      if (first) {
-        const names = first[1].trim().split(/\s+/);
-        if (names[0] !== "." && names.every((n) => n === names[0])) return names[0];
-      }
-    } catch {}
-    return null;
-  }
-
-  function barMount() {
+  // Anchor #zs-bar outside React's composer DOM (inside #zs-root via core
+  // anchored mode) so React re-renders or grid CSS changes on ChatGPT never
+  // detach, hide, or clip the Start bar, while reserving clean padding above
+  // the composer surface. Falls back to null (floating bar) if no card is wide enough.
+  function barAnchor() {
     const ed = getEditor();
     if (!ed) return null;
-    const box = ed.closest("[class*='composer-surface']");
-    if (!box) return null;
-    const bar = document.getElementById("zs-bar");
-    let st = null;
-    try { st = getComputedStyle(box); } catch {}
-    if (st && /\bgrid\b/.test(st.display || "")) {
-      const area = topArea(box);
-      if (area) {
-        if (bar) {
-          if (bar.style.gridArea !== area) bar.style.gridArea = area;
-          if (bar.style.gridColumn !== "") bar.style.gridColumn = "";
-        }
-      } else if (!st.gridTemplateAreas || st.gridTemplateAreas === "none") {
-        if (bar) {
-          if (bar.style.gridArea !== "auto") bar.style.gridArea = "auto";
-          if (bar.style.gridColumn !== "1 / -1") bar.style.gridColumn = "1 / -1";
-        }
-      } else {
-        // Named grid template with no full-width top row: fall back to the
-        // floating bar rather than letting overlay.css's grid-area create
-        // implicit tracks that collapse the editor.
-        return null;
-      }
-    } else if (bar) {
-      if (bar.style.gridArea !== "auto") bar.style.gridArea = "auto";
-      if (bar.style.gridColumn !== "") bar.style.gridColumn = "";
+    const surface = ed.closest("[class*='composer-surface']");
+    if (surface && isVisibleBox(surface)) {
+      const r = surface.getBoundingClientRect ? surface.getBoundingClientRect() : null;
+      if (!r || (r.width >= 260 && r.height >= 36)) return surface;
     }
-    // Skip our own bar if already mounted, otherwise we'd insert it before itself.
-    let before = box.firstElementChild;
-    if (before && before.id === "zs-bar") before = before.nextElementSibling;
-    return { parent: box, before, inside: true };
+    let n = ed.parentElement;
+    for (let i = 0; i < 8 && n; i++) {
+      if (n.closest && n.closest("#zs-root")) break;
+      const cl = [...(n.classList || [])];
+      if (cl.some((c) => c.startsWith("rounded"))) {
+        const r = n.getBoundingClientRect ? n.getBoundingClientRect() : null;
+        if (!r || (r.width >= 260 && r.height >= 36)) return n;
+      }
+      n = n.parentElement;
+    }
+    const f = composerFrame();
+    if (f && f.getBoundingClientRect) {
+      const r = f.getBoundingClientRect();
+      if (r.width >= 260) return f;
+    }
+    return null;
   }
 
   // ── Input lock ────────────────────────────────────────────────────────────
@@ -352,7 +355,12 @@ const ZSProvider = (() => {
     _locked = on;
     const ed = getEditor();
     if (!ed) return;
-    ed.setAttribute("contenteditable", on ? "false" : "true");
+    if (ed.tagName === "TEXTAREA") {
+      if (on) ed.setAttribute("readonly", "");
+      else ed.removeAttribute("readonly");
+    } else {
+      ed.setAttribute("contenteditable", on ? "false" : "true");
+    }
     if (on) ed.setAttribute("data-zs-locked", "1");
     else ed.removeAttribute("data-zs-locked");
   }
@@ -618,6 +626,15 @@ const ZSProvider = (() => {
   // Fallback: type it. Yielding does not make this faster - it keeps the page
   // alive while it happens, so the user can still click (and Stop still works).
   async function typeEditorText(ed, text) {
+    if (ed.tagName === "TEXTAREA") {
+      ed.focus();
+      const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
+      const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
+      if (setter && setter.set) setter.set.call(ed, text);
+      else ed.value = text;
+      ed.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
     selectAll(ed);
     const lines = String(text).split("\n");
     const t0 = Date.now();
@@ -652,7 +669,10 @@ const ZSProvider = (() => {
     if (!ed) throw new Error("ChatGPT input box not found");
     text = truncateForSend(text);
     const relock = _locked;
-    if (relock) ed.setAttribute("contenteditable", "true"); // injection needs it editable
+    if (relock) {
+      if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
+      else ed.setAttribute("contenteditable", "true"); // injection needs it editable
+    }
     const hasText = () => editorText().replace(/\s+/g, "") === text.replace(/\s+/g, "");
     try {
       if (!hasText()) await setEditorText(ed, text);
@@ -694,7 +714,7 @@ const ZSProvider = (() => {
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
     } finally {
-      if (relock) { const e2 = getEditor(); if (e2) e2.setAttribute("contenteditable", "false"); }
+      if (relock) setInputLock(true);
     }
   }
 
@@ -1014,14 +1034,14 @@ const ZSProvider = (() => {
       if (d) diag = d;
       // Version beacon: stamp the loaded build onto <html> so a reload can be
       // confirmed from the page (read document.documentElement.dataset.zsGptVer).
-      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-21_chatgpt-fixes-v2"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gpt-ver", "2026-11-22_v1.7.0"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, itemKey, readAssistant,
     streamLen, snapshot,
     // composer / state
-    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barMount,
+    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barAnchor,
     // Cover the scrolling text band, and lift the core's 200px clamp past that
     // band's own ~245px ceiling so a full composer is covered edge to edge.
     coverTarget,

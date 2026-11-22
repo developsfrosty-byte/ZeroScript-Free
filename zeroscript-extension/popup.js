@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 const KOFI_URL = "https://ko-fi.com/sebattfg";
 const SUPPORTED_HOSTS = [
-  "chat.deepseek.com", "deepseek.com", "chatgpt.com", "chat.openai.com",
-  "gemini.google.com", "www.kimi.ai", "kimi.ai",
-  "chat.z.ai", "chat.qwen.ai", "arena.ai", "www.meta.ai", "meta.ai",
+  "chat.deepseek.com", "deepseek.com",
+  "claude.ai",
+  "chatgpt.com", "www.chatgpt.com", "chat.openai.com",
+  "gemini.google.com",
+  "grok.com",
+  "chat.mistral.ai",
+  "www.kimi.ai", "kimi.ai",
+  "chat.z.ai", "chat.qwen.ai",
+  "arena.ai", "www.arena.ai", "lmarena.ai", "www.lmarena.ai", "beta.lmarena.ai", "chat.lmsys.org",
+  "www.meta.ai", "meta.ai",
 ];
 const DEFAULT_AI_URL = "https://chat.deepseek.com/";
 
@@ -25,7 +32,7 @@ function render(s) {
         : studioOff ? "Studio not connected · enable the MCP server in Studio"
         : "Bridge OK · open Roblox Studio")
     : "Bridge offline";
-  tools.textContent = s.connected ? `${s.tools || 0} tools available` : "Run bridge.py";
+  tools.textContent = s.connected ? `${s.tools || 0} tools available` : "Open ZeroScript desktop app";
   servers.textContent = s.connected
     ? list.map((x) => `${x.alive ? "●" : "○"} ${x.id} (${x.alive ? x.tools + " tools" : "down"})`).join("\n")
     : "";
