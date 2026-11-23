@@ -669,7 +669,7 @@
         pillTxt.textContent = "LIVE CONNECTED";
       } else if (bl.addonInstalled && bl.serverConfigured) {
         pill.classList.add("warn");
-        pillTxt.textContent = "READY · OPEN BLENDER";
+        pillTxt.textContent = bl.blenderRunning ? "RESTART BLENDER" : "READY · OPEN BLENDER";
       } else {
         pill.classList.add("off");
         pillTxt.textContent = "SETUP NEEDED";
@@ -1138,7 +1138,10 @@
       _sig.blender = "";
       renderStatus(res);
       const vers = (res.installed || []).map((x) => x.version).join(", ");
-      msg.textContent = `Installed & enabled in Blender ${vers || ""}. Open Blender to connect live!`;
+      const running = res.blenderRunning || (res.blender && res.blender.blenderRunning);
+      msg.textContent = running
+        ? `Installed & enabled in Blender ${vers || ""}. Restart your open Blender window to activate the updated add-on!`
+        : `Installed & enabled in Blender ${vers || ""}. Open Blender to connect live!`;
       toast("Blender add-on installed & enabled!");
     } else {
       msg.classList.add("err");
@@ -1167,8 +1170,9 @@
   });
   $("#btn-bl-test").addEventListener("click", async () => {
     const msg = $("#bl-action-msg");
+    const port = (state.status && state.status.blender && state.status.blender.port) || 17615;
     msg.classList.remove("err");
-    msg.textContent = "Probing Blender on 127.0.0.1:9876...";
+    msg.textContent = `Probing Blender on 127.0.0.1:${port}...`;
     const res = await api("/api/blender/status");
     if (res && res.ok && res.blender) {
       if (state.status) state.status.blender = res.blender;
@@ -1179,7 +1183,9 @@
         toast("Blender bridge connected!");
       } else {
         msg.classList.add("err");
-        msg.textContent = "Blender is not responding on port 9876 yet — open Blender first.";
+        msg.textContent = res.blender.blenderRunning
+          ? `Blender is open, but the ZeroScript add-on isn't active on port ${res.blender.port || port} yet — restart Blender (or press N in View3D → ZeroScript → Start Bridge).`
+          : `Blender is not responding on port ${res.blender.port || port} yet — open Blender first.`;
       }
     }
   });

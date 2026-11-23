@@ -27,12 +27,13 @@ import traceback
 import bpy
 from mathutils import Euler, Vector
 
-DEFAULT_PORT = int(os.environ.get("ZS_BLENDER_PORT", "9876"))
+DEFAULT_PORT = int(os.environ.get("ZS_BLENDER_PORT", "17615"))
 
 _server_lock = threading.Lock()
 _server_socket = None
 _server_thread = None
 _server_running = False
+_user_stopped = False
 _server_port = DEFAULT_PORT
 _cmd_queue: "queue.Queue[tuple]" = queue.Queue()
 _timer_registered = False
@@ -1051,6 +1052,8 @@ class ZEROSCRIPT_OT_StartBridge(bpy.types.Operator):
     bl_description = "Start the local ZeroScript AI TCP bridge"
 
     def execute(self, context):
+        global _user_stopped
+        _user_stopped = False
         port = getattr(context.scene, "zs_bridge_port", DEFAULT_PORT)
         ok, msg = start_bridge(port)
         self.report({"INFO"} if ok else {"ERROR"}, msg)
@@ -1063,6 +1066,8 @@ class ZEROSCRIPT_OT_StopBridge(bpy.types.Operator):
     bl_description = "Stop the local ZeroScript AI TCP bridge"
 
     def execute(self, context):
+        global _user_stopped
+        _user_stopped = True
         stop_bridge()
         self.report({"INFO"}, "ZeroScript bridge stopped")
         return {"FINISHED"}
@@ -1090,9 +1095,19 @@ class ZEROSCRIPT_PT_BridgePanel(bpy.types.Panel):
             layout.label(text=f"Last: {_last_action_info} ({_last_action_time})", icon="TIME")
 
 
-def _delayed_autostart():
-    start_bridge(DEFAULT_PORT)
+def _ensure_started():
+    if not bpy.app.background and not _user_stopped and not _server_running:
+        start_bridge(DEFAULT_PORT)
     return None
+
+
+@bpy.app.handlers.persistent
+def _on_load_post(_dummy=None):
+    if not bpy.app.background and not _user_stopped:
+        if not _server_running:
+            start_bridge(DEFAULT_PORT)
+        elif not bpy.app.timers.is_registered(_process_queue):
+            bpy.app.timers.register(_process_queue, first_interval=0.03, persistent=True)
 
 
 CLASSES = (
@@ -1103,6 +1118,8 @@ CLASSES = (
 
 
 def register():
+    global _user_stopped
+    _user_stopped = False
     for cls in CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Scene.zs_bridge_port = bpy.props.IntProperty(
@@ -1111,11 +1128,19 @@ def register():
         min=1024,
         max=65535,
     )
+    if _on_load_post not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_on_load_post)
     if not bpy.app.background:
-        bpy.app.timers.register(_delayed_autostart, first_interval=0.25)
+        start_bridge(DEFAULT_PORT)
+        bpy.app.timers.register(_ensure_started, first_interval=0.5, persistent=True)
 
 
 def unregister():
+    try:
+        while _on_load_post in bpy.app.handlers.load_post:
+            bpy.app.handlers.load_post.remove(_on_load_post)
+    except Exception:
+        pass
     stop_bridge()
     if hasattr(bpy.types.Scene, "zs_bridge_port"):
         del bpy.types.Scene.zs_bridge_port

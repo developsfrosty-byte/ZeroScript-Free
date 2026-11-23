@@ -6,7 +6,7 @@ All notable changes to ZeroScript Free are documented here.
 
 ### Added
 - **Native Built-in Blender 3D AI Integration (`blender_addon/zeroscript_blender_addon.py` + `blender_mcp.py` + `bridge.py` + `app.py`):**
-  - Zero-dependency Blender 3.6 / 4.x / 5.x (including 5.2 LTS) add-on with main-thread safe TCP JSON bridge (`127.0.0.1:9876`) and View3D N-panel (`ZeroScript`) controls.
+  - Zero-dependency Blender 3.6 / 4.x / 5.x (including 5.2 LTS) add-on with main-thread safe TCP JSON bridge (`127.0.0.1:17615`) and View3D N-panel (`ZeroScript`) controls.
   - Built-in stdio MCP server (`blender_mcp.py`) exposing 11 `blender_*` tools: `blender_get_scene_info`, `blender_get_object_info`, `blender_execute_python`, `blender_create_primitive`, `blender_transform_object`, `blender_set_material`, `blender_add_modifier`, `blender_capture_viewport`, `blender_render_scene`, `blender_export_asset`, and `blender_import_asset`.
   - Added raw `###BLENDER### ... ###END_BLENDER###` (and `###PY###`) code blocks in `zeroscript-extension/core/parser.js` + `core/config.js` so models never need to JSON-escape Python code, plus live Blender status and vision handling in `background.js`, `core/main.js`, and `popup.js`.
 - **10th AAA Agent Skill Playbook (`skills/blender-3d-roblox-pipeline.md`) & Presets (`skills_manager.py`):**

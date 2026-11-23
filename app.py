@@ -76,7 +76,7 @@ _blender_cache = {
     "objects": 0,
     "activeObject": None,
     "filepath": "",
-    "port": 9876,
+    "port": 17615,
     "installations": blender_mcp.find_blender_installations() if blender_mcp is not None else [],
     "addonInstalled": False,
     "ts": 0.0,
@@ -269,12 +269,12 @@ def _build_diagnostics_payload():
     if bl.get("connected"):
         bl_status = "ok"
         bl_detail = (
-            f"Blender {bl.get('version') or ''} connected on port {bl.get('port', 9876)} "
+            f"Blender {bl.get('version') or ''} connected on port {bl.get('port', 17615)} "
             f"(scene: {bl.get('scene') or 'Scene'}, {bl.get('objects', 0)} objects, {bl.get('serverTools', 0)} tools)."
         )
     elif bl.get("addonInstalled") and bl.get("serverConfigured"):
         bl_status = "warn"
-        bl_detail = "Blender add-on & MCP server installed — open Blender to connect live on port 9876."
+        bl_detail = f"Blender add-on & MCP server installed — open/restart Blender to connect live on port {bl.get('port', 17615)}."
     elif bl.get("installations"):
         vers = ", ".join(i.get("version", "?") for i in bl["installations"])
         bl_status = "warn"

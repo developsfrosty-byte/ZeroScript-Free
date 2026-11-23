@@ -18,7 +18,7 @@ from pathlib import Path
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON_SRC = os.path.join(HERE, "blender_addon", "zeroscript_blender_addon.py")
 ADDON_MODULE = "zeroscript_blender_addon"
-DEFAULT_PORT = int(os.environ.get("ZS_BLENDER_PORT", "9876"))
+DEFAULT_PORT = int(os.environ.get("ZS_BLENDER_PORT", "17615"))
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
@@ -188,8 +188,25 @@ def install_blender_addon(auto_enable: bool = True) -> dict:
         "installed": installed_to,
         "enabled": enabled_in,
         "warnings": warnings,
+        "blenderRunning": is_blender_running(),
         "installations": find_blender_installations(),
     }
+
+
+def is_blender_running() -> bool:
+    """Return True if a Blender desktop process is currently running."""
+    try:
+        kw = {"creationflags": _NO_WINDOW} if sys.platform == "win32" else {}
+        if sys.platform == "win32":
+            out = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq blender.exe"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5, **kw,
+            ).stdout
+            return "blender.exe" in out.lower()
+        cmd = ["pgrep", "-ix", "Blender"] if sys.platform == "darwin" else ["pgrep", "-x", "blender"]
+        return subprocess.run(cmd, capture_output=True, timeout=5).returncode == 0
+    except Exception:
+        return False
 
 
 def launch_blender(exe_path: str | None = None) -> tuple[bool, str | None]:
@@ -251,6 +268,7 @@ def probe_blender(port: int | None = None, timeout: float = 0.8) -> dict:
     if res.get("ok"):
         return {
             "connected": True,
+            "blenderRunning": True,
             "version": res.get("blender_version") or "",
             "scene": res.get("scene") or "Scene",
             "objects": int(res.get("object_count") or 0),
@@ -262,6 +280,7 @@ def probe_blender(port: int | None = None, timeout: float = 0.8) -> dict:
         }
     return {
         "connected": False,
+        "blenderRunning": is_blender_running(),
         "version": installs[0]["version"] if installs else "",
         "scene": "",
         "objects": 0,
