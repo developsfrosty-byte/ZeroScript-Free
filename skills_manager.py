@@ -18,13 +18,17 @@ BUILTIN_ORDER = {
     "lighting-atmosphere-audio": 6,
     "economy-progression-loops": 7,
     "performance-optimization": 8,
-    "blender-3d-roblox-pipeline": 9,
+    "game-recreation-1to1": 9,
+    "animations-rigging-procedural": 10,
+    "camera-movement-physics": 11,
+    "maps-biomes-atmosphere": 12,
 }
 
 VALID_CATEGORIES = (
     "UI",
     "Building",
-    "Blender",
+    "Game Cloning",
+    "Animations",
     "Cutscenes",
     "Combat & VFX",
     "Scripting",
@@ -36,23 +40,39 @@ VALID_CATEGORIES = (
 VALID_MODES = ("auto", "always")
 VALID_ACCENTS = ("indigo", "cyan", "emerald", "amber", "crimson", "prism")
 VALID_GLASS_STYLES = ("liquid", "frosted", "crystal")
+VALID_BACKDROPS = ("sunset", "aurora", "ocean", "midnight")
 
 SKILL_PRESETS = [
     {
         "id": "all-rounder",
         "name": "Full AAA Stack",
-        "desc": "Enable all 10 specialized playbooks across UI, architecture, Blender 3D, combat, AI, lighting, economy, and performance.",
+        "desc": "Enable all 13 specialized playbooks across 1:1 cloning, animations, UI, architecture, combat, AI, lighting, economy, and performance.",
         "skills": list(BUILTIN_ORDER.keys()),
     },
     {
-        "id": "blender-3d",
-        "name": "Blender 3D & Assets",
-        "desc": "Best for modeling props, weapons, stylized environments in Blender and exporting <10k-tri meshes to Roblox Studio.",
+        "id": "game-cloner-1to1",
+        "name": "1:1 Game Cloner",
+        "desc": "Maximum fidelity stack for recreating any game 1:1 (Clone Architect, Animations & Motor6D, Movement/Camera, 1:1 Maps, UI, Combat, Networking).",
         "skills": [
-            "blender-3d-roblox-pipeline",
-            "building-architecture",
+            "game-recreation-1to1",
+            "animations-rigging-procedural",
+            "camera-movement-physics",
+            "maps-biomes-atmosphere",
+            "ui-craftsmanship",
+            "combat-vfx-gamefeel",
+            "luau-architecture-networking",
+        ],
+    },
+    {
+        "id": "animations-combat",
+        "name": "Animations & Game Feel",
+        "desc": "Best for custom Motor6D/KeyframeSequence movesets, procedural springs, dashes, camera recoil, combat VFX, and cutscenes.",
+        "skills": [
+            "animations-rigging-procedural",
+            "combat-vfx-gamefeel",
+            "camera-movement-physics",
+            "cutscenes-cinematics",
             "lighting-atmosphere-audio",
-            "performance-optimization",
         ],
     },
     {
@@ -140,16 +160,22 @@ BUILTIN_STARTER_PROMPTS = [
         "text": "Read cutscenes-cinematics skill first. Build a CutsceneDirector ModuleScript in ReplicatedStorage with Catmull-Rom spline camera motion, DepthOfField focus pulls, 2.35:1 letterbox bars, subtitle beats, Skip button, and zero-softlock cleanup().",
     },
     {
-        "id": "blender-stylized-sword",
-        "title": "Blender Stylized Fantasy Sword (Roblox Export)",
-        "category": "Blender",
-        "text": "Call list_mcp_servers then list_commands with server='blender', and read the blender-3d-roblox-pipeline skill. Model a stylized fantasy greatsword in Blender with a beveled fuller blade, leather-wrapped grip, glowing crystal pommel, metallic/roughness PBR materials, capture a viewport preview to verify silhouette, and export a <5k tri Roblox-ready FBX.",
+        "id": "clone-battlegrounds-1to1",
+        "title": "1:1 Anime Battlegrounds Combat Clone",
+        "category": "Game Cloning",
+        "text": "Read game-recreation-1to1, animations-rigging-procedural, camera-movement-physics, and combat-vfx-gamefeel skills first. Build a complete 1:1 Battlegrounds vertical slice: 4-hit M1 combo + downslam with code-authored KeyframeSequence animations, 4-way LinearVelocity dash with i-frames, 2 active abilities, block/parry, destructive arena landmark map, sleek bottom hotbar HUD, and playtest verification.",
     },
     {
-        "id": "blender-sci-fi-crate",
-        "title": "Blender Sci-Fi Supply Crate + Emissive Trim",
-        "category": "Blender",
-        "text": "Call list_mcp_servers then list_commands with server='blender', and read blender-3d-roblox-pipeline. Build a sci-fi supply crate in Blender using bmesh insets, corner latches, bevel modifiers, dark titanium + cyan emissive materials, Smart UV unwrap, inspect with blender_capture_viewport, and export to GLB.",
+        "id": "procedural-weapon-anims",
+        "title": "Procedural R15/R6 Weapon & Dash Animation Suite",
+        "category": "Animations",
+        "text": "Read animations-rigging-procedural and camera-movement-physics skills first. Build a modular ProceduralAnimator + KeyframeSequence library supporting live Studio playback (idle breathing, sprint lean, 3-phase sword slash with HitFrame KeyframeMarker, parry pose, and landing squash) plus spring-damped FOV/camera punch.",
+    },
+    {
+        "id": "clone-horror-doors-1to1",
+        "title": "1:1 Atmospheric Horror / Doors-Style Experience",
+        "category": "Game Cloning",
+        "text": "Read game-recreation-1to1, maps-biomes-atmosphere, and ui-craftsmanship skills first. Recreate a 1:1 procedural numbered-room horror loop with hinged Motor6D doors, flickering sconce Future lighting, inventory flashlight/key items, entity ambush telegraphing + closet hiding, and crisp dark-glass HUD.",
     },
 ]
 
@@ -465,6 +491,8 @@ def default_settings():
         "autoOpenWindow": True,
         "appPort": int(os.environ.get("ZS_APP_PORT", "17614")),
         "accentTheme": "indigo",
+        "liquidGlass": True,
+        "liquidBackdrop": "sunset",
         "glassStyle": "liquid",
         "ambientMotion": True,
         "favoriteProviders": ["claude", "deepseek", "gemini"],
@@ -511,6 +539,10 @@ def load_settings():
                     cfg["appPort"] = saved["appPort"]
                 if isinstance(saved.get("accentTheme"), str) and saved["accentTheme"].strip().lower() in VALID_ACCENTS:
                     cfg["accentTheme"] = saved["accentTheme"].strip().lower()
+                if isinstance(saved.get("liquidGlass"), bool):
+                    cfg["liquidGlass"] = saved["liquidGlass"]
+                if isinstance(saved.get("liquidBackdrop"), str) and saved["liquidBackdrop"].strip().lower() in VALID_BACKDROPS:
+                    cfg["liquidBackdrop"] = saved["liquidBackdrop"].strip().lower()
                 if isinstance(saved.get("glassStyle"), str) and saved["glassStyle"].strip().lower() in VALID_GLASS_STYLES:
                     cfg["glassStyle"] = saved["glassStyle"].strip().lower()
                 if isinstance(saved.get("ambientMotion"), bool):
@@ -550,6 +582,12 @@ def save_settings(patch):
             th = patch["accentTheme"].strip().lower()
             if th in VALID_ACCENTS:
                 cfg["accentTheme"] = th
+        if "liquidGlass" in patch:
+            cfg["liquidGlass"] = _parse_bool(patch["liquidGlass"], default=cfg["liquidGlass"])
+        if "liquidBackdrop" in patch and isinstance(patch["liquidBackdrop"], str):
+            bd = patch["liquidBackdrop"].strip().lower()
+            if bd in VALID_BACKDROPS:
+                cfg["liquidBackdrop"] = bd
         if "glassStyle" in patch and isinstance(patch["glassStyle"], str):
             gs = patch["glassStyle"].strip().lower()
             if gs in VALID_GLASS_STYLES:

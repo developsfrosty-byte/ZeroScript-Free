@@ -23,11 +23,6 @@ const ZSParse = (() => {
   const LUA_DEFAULT_DM = "Edit";
   const dmName = (m) => (m ? m[0].toUpperCase() + m.slice(1).toLowerCase() : LUA_DEFAULT_DM);
 
-  // Raw Blender Python block markers (parallel to ###LUA###) so models never
-  // have to JSON-escape quotes inside blender_execute_python calls.
-  const BLENDER_START_RE = /###\s*(?:blender|py|python)\s*(?:###|---)/i;
-  const BLENDER_END_RE = /###\s*end[_\- ]?(?:blender|py|python)\s*###/i;
-
   // Find the first LUA start marker at or after `from`. Returns { pos, len, dm }
   // where len is the marker's own length to skip past it and dm the requested
   // datamodel ("Edit" when unspecified).
@@ -42,16 +37,6 @@ const ZSParse = (() => {
     return m ? from + m.index : -1;
   }
 
-  function findBlenderStart(text, from = 0) {
-    const m = BLENDER_START_RE.exec(text.slice(from));
-    return m ? { pos: from + m.index, len: m[0].length } : { pos: -1, len: 0 };
-  }
-
-  function findBlenderEnd(text, from = 0) {
-    const m = BLENDER_END_RE.exec(text.slice(from));
-    return m ? from + m.index : -1;
-  }
-
   // Strip a code-block UI label (the "Copy" button caption, or a leftover fence
   // language token like "json") that some sites bleed into the block's text
   // right after the opening marker. Seen live on Kimi: its code-block chrome
@@ -62,7 +47,7 @@ const ZSParse = (() => {
   // trailing whitespace (\s+) so it never eats a legitimate identifier like
   // `Copy(x)` that a script might genuinely start with.
   function stripCodeChrome(code) {
-    return code.replace(/^(?:json|python|py|copy)\s+/i, "");
+    return code.replace(/^(?:json|copy)\s+/i, "");
   }
 
   // A command is `{"command":"name", ...}` (or "tool"). The params/arguments
@@ -98,20 +83,17 @@ const ZSParse = (() => {
       r.includes(START_M) ||
       r.includes("MCP_TOOL") ||
       LUA_START_RE.test(r) ||
-      BLENDER_START_RE.test(r) ||
       CMD_KEY_RE.test(r)
     );
   }
 
   // True if the reply contains a tool block that has STARTED but not yet CLOSED
-  // (a ###LUA### / ###BLENDER### / ###MCP_TOOL### opener with no matching end marker). Used by the
+  // (a ###LUA### / ###MCP_TOOL### opener with no matching end marker). Used by the
   // response watcher to avoid finalizing a command that is still being streamed.
   function hasOpenToolBlock(r) {
     if (!r) return false;
     const { pos: ls, len } = findLuaStart(r);
     if (ls !== -1 && findLuaEnd(r, ls + len) === -1) return true;
-    const { pos: bs, len: blen } = findBlenderStart(r);
-    if (bs !== -1 && findBlenderEnd(r, bs + blen) === -1) return true;
     const sm = r.indexOf(START_M);
     if (sm !== -1) {
       const low = r.toLowerCase();
@@ -253,13 +235,6 @@ const ZSParse = (() => {
         from = em + END_M.length;
         continue;
       }
-      const { pos: bs, len: blLen } = findBlenderStart(body);
-      const be = findBlenderEnd(body, bs === -1 ? 0 : bs + blLen);
-      if (bs !== -1 && be !== -1 && be > bs) {
-        out.push({ tool: "blender_execute_python", arguments: { code: stripCodeChrome(body.slice(bs + blLen, be).trim()) } });
-        from = em + END_M.length;
-        continue;
-      }
       for (const sub of body.split(START_M)) {
         const cleaned = sub.trim().replace(/^(?:json|JSON|Copy|copy)\s*/i, "").trim();
         if (!cleaned) continue;
@@ -285,26 +260,7 @@ const ZSParse = (() => {
         out.push({ tool: "execute_luau", arguments: { code: stripCodeChrome(r.slice(ls + luaLen, le).trim()), datamodel_type: dm } });
       }
     }
-    // Bare ###BLENDER### … ###END_BLENDER### block with no JSON envelope at all.
-    if (out.length === 0) {
-      const { pos: bs, len: blLen } = findBlenderStart(r);
-      const be = findBlenderEnd(r, bs === -1 ? 0 : bs + blLen);
-      if (bs !== -1 && be !== -1 && be > bs) {
-        out.push({ tool: "blender_execute_python", arguments: { code: stripCodeChrome(r.slice(bs + blLen, be).trim()) } });
-      }
-    }
-    return out.map(cleanLuaCall).map(cleanBlenderCall);
-  }
-
-  function cleanBlenderCall(call) {
-    if (!call || (call.tool !== "blender_execute_python" && call.tool !== "execute_blender_code")) return call;
-    const code = call.arguments && call.arguments.code;
-    if (typeof code !== "string") return call;
-    const s = findBlenderStart(code);
-    if (s.pos === -1) return call;
-    const e = findBlenderEnd(code, s.pos + s.len);
-    call.arguments.code = code.slice(s.pos + s.len, e === -1 ? code.length : e).trim();
-    return call;
+    return out.map(cleanLuaCall);
   }
 
   // Some models (seen live on GLM) wrap execute_luau in the JSON envelope AND
@@ -389,7 +345,6 @@ const ZSParse = (() => {
     const m = txt.match(/"(?:command|tool)"\s*:\s*"([^"]*)/);
     if (m && m[1].trim()) return m[1].trim();
     if (txt.includes("execute_luau") || LUA_START_RE.test(txt)) return "execute_luau";
-    if (txt.includes("blender_execute_python") || BLENDER_START_RE.test(txt)) return "blender_execute_python";
     return "command";
   }
 
@@ -415,14 +370,13 @@ const ZSParse = (() => {
   function hasCommandShape(txt) {
     return txt.includes(START_M) ||
            LUA_START_RE.test(txt) ||
-           BLENDER_START_RE.test(txt) ||
            DSML_RE.test(txt) ||
            CMD_KEY_RE.test(txt); // command/tool with OR without params (e.g. list_commands)
   }
 
   return {
-    START_M, END_M, LUA_START_RE, LUA_END_RE, BLENDER_START_RE, BLENDER_END_RE, CMD_KEY_RE, DSML_RE,
-    findLuaStart, findLuaEnd, findBlenderStart, findBlenderEnd, matchBrace, extractJson, normalizeCall,
+    START_M, END_M, LUA_START_RE, LUA_END_RE, CMD_KEY_RE, DSML_RE,
+    findLuaStart, findLuaEnd, matchBrace, extractJson, normalizeCall,
     hasToolSignature, hasOpenToolBlock, parseToolCalls, salvageCutOff, toolNameFromText,
     isInjectedFeedback, hasCommandShape,
   };

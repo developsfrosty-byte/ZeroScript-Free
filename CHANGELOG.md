@@ -5,18 +5,17 @@ All notable changes to ZeroScript Free are documented here.
 ## [1.8.0] - 2026-11-23
 
 ### Added
-- **Native Built-in Blender 3D AI Integration (`blender_addon/zeroscript_blender_addon.py` + `blender_mcp.py` + `bridge.py` + `app.py`):**
-  - Zero-dependency Blender 3.6 / 4.x / 5.x (including 5.2 LTS) add-on with main-thread safe TCP JSON bridge (`127.0.0.1:17615`) and View3D N-panel (`ZeroScript`) controls.
-  - Built-in stdio MCP server (`blender_mcp.py`) exposing 11 `blender_*` tools: `blender_get_scene_info`, `blender_get_object_info`, `blender_execute_python`, `blender_create_primitive`, `blender_transform_object`, `blender_set_material`, `blender_add_modifier`, `blender_capture_viewport`, `blender_render_scene`, `blender_export_asset`, and `blender_import_asset`.
-  - Added raw `###BLENDER### ... ###END_BLENDER###` (and `###PY###`) code blocks in `zeroscript-extension/core/parser.js` + `core/config.js` so models never need to JSON-escape Python code, plus live Blender status and vision handling in `background.js`, `core/main.js`, and `popup.js`.
-- **10th AAA Agent Skill Playbook (`skills/blender-3d-roblox-pipeline.md`) & Presets (`skills_manager.py`):**
-  - Added **Blender 3D Modeling & Roblox Pipeline** playbook, the **Blender 3D & Assets** preset pack, and 2 Blender starter prompts.
-- **Liquid Glass UI & Upgraded App Motion (`app_ui/`):**
-  - Added selectable Glass Surface Styles (`Liquid Glass`, `Frosted Dark`, `Crystal Clear`), a 6th iridescent **Prism** accent theme, living aurora orb backdrop, interactive cursor specular sheen, spring cubic-bezier transitions, staggered entrance choreography, animated KPI counters, and a `requestAnimationFrame` ambient dot canvas.
-- **New Desktop App Features (`app_ui/` + `app.py`):**
-  - **Blender 3D Hub (`#view-blender`):** 1-click **Install & Enable Add-on**, **Launch Blender**, **Enable/Disable MCP**, **Test Connection**, live scene telemetry, live **Capture Viewport** preview frame, and Blender Health Doctor + tray actions.
-  - **Upgraded 3-Way Home Pipeline Diagram:** Live dual-target view (`AI Chat` → `ZeroScript Hub` → `Studio MCP` + `Blender 3D`).
-  - **Activity Inspector & Command Palette Upgrades:** Server filters (`All Apps` / `Roblox` / `Blender`), JSON export, per-call `COPY`, and full `ArrowUp` / `ArrowDown` keyboard navigation in `Ctrl+K`.
+- **4 Overpowered AAA Skill Playbooks (`skills/` + `skills_manager.py`, 13 Built-in Total):**
+  - **1:1 Game Recreation & Clone Architect (`game-recreation-1to1`):** 6-layer vertical-slice deconstruction (core loop, exact feel math, camera perspective, iconic landmarks, 1:1 HUD language, audio/VFX juice), zero-stub modular architecture, and mandatory `screen_capture` + playtest verification.
+  - **AAA Animations, Motor6D & Procedural Motion (`animations-rigging-procedural`):** Code-authored `KeyframeSequence` + `Pose` trees registered live in Studio via `KeyframeSequenceProvider`, `KeyframeMarker` hit sync, 60fps `Motor6D.Transform` spring locomotion, 4-phase combat choreography, FPS viewmodels, and `IKControl`.
+  - **AAA Movement, Parkour & Camera Feel (`camera-movement-physics`):** Coyote time, jump buffering, `LinearVelocity` dashes with i-frames, momentum slides, wall-run/vault raycasts, dynamic speed FOV, lock-on, and trauma shake.
+  - **1:1 Map Design, Landmarks & Biomes (`maps-biomes-atmosphere`):** Human-scale stud ratios, landmark-first sightlines, 3-lane combat flow, and signature biome lighting recipes.
+  - Added **1:1 Game Cloner** and **Animations & Game Feel** preset packs plus 3 matching starter prompts.
+- **Reference-Matched Liquid Glass Mode & Settings (`app_ui/` + `skills_manager.py`):**
+  - Added a **Liquid Glass Mode** toggle (`liquidGlass`) and 4 selectable scenic atmospheric backdrops (**Sunset Skyline**, **Aurora Sky**, **Deep Ocean**, **Midnight Neon**) with translucent blown-glass squircle surfaces, curved optical specular edge lensing, and crisp high-contrast typography.
+  - Added selectable **Glass Refraction Style** (`Liquid Glass`, `Frosted Dark`, `Crystal Clear`) and a 6th iridescent **Prism** accent theme.
+- **Upgraded App Motion & Workspace Features (`app_ui/`):**
+  - Spring cubic-bezier transitions, interactive cursor specular sheen (`--mx`/`--my`), smooth `requestAnimationFrame` ambient dot-grid canvas, animated KPI counters, Activity JSON export + per-call `COPY`, and `ArrowUp`/`ArrowDown` keyboard navigation in `Ctrl+K` Command Palette.
 
 ## [1.7.0] - 2026-11-22
 

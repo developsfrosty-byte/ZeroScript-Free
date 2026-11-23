@@ -721,9 +721,6 @@
       if (ZSParse.LUA_END_RE.test(r) && !ZSParse.LUA_START_RE.test(r) && !r.includes(ZSParse.START_M)) {
         return { kind: "parse_error", reason: "luaOpener", raw: r, item: d.item };
       }
-      if (ZSParse.BLENDER_END_RE.test(r) && !ZSParse.BLENDER_START_RE.test(r) && !r.includes(ZSParse.START_M)) {
-        return { kind: "parse_error", reason: "blenderOpener", raw: r, item: d.item };
-      }
       // Malformed command: the model emitted a tool's RAW ARGUMENTS as a bare JSON
       // object (e.g. {"datamodel_type":...,"edits":[...],"file_path":...}) instead of
       // the required {"command":...,"params":...} envelope - it treated the tool as a
@@ -820,7 +817,7 @@
   // are handled (see the `r.images.length` branch) and turned into a plain
   // error on non-vision providers, so nothing needs to be predicted here.
   const ALWAYS_BLOCKED_TOOLS = new Set(["subagent"]);
-  const VISION_TOOLS = new Set(["screen_capture", "blender_capture_viewport", "blender_render_scene"]);
+  const VISION_TOOLS = new Set(["screen_capture"]);
   const bareToolName = (name) => (name && name.includes("/") ? name.split("/").pop() : name) || "";
   // Is `name` a tool we actually have? The bridge ADVERTISES names that may carry
   // a per-server prefix when two MCP servers expose the same tool (see
@@ -1167,7 +1164,7 @@
 
   function argSummary(call) {
     if (!call) return "";
-    if (call.tool === "execute_luau" || call.tool === "blender_execute_python") {
+    if (call.tool === "execute_luau") {
       const code = (call.arguments && call.arguments.code) || "";
       const first = code.split("\n").map((s) => s.trim()).filter(Boolean)[0] || "";
       return first.slice(0, 46);
@@ -2602,7 +2599,7 @@
     let root, bar, dot, brandEl, stateEl, actionBtn, stopBtn, switchBtn, supportBtn, discordEl, menuEl, unstableEl;
     let cover, coverRaf, barRaf;
     let openMenuFn = null; // set by build(); lets the popup force the panel open via runtime message
-    let bridgeOk = false, studioDown = false, placeDown = false, appDown = false, addonOk = false, blenderLive = false, studioProcUp = false;
+    let bridgeOk = false, studioDown = false, placeDown = false, appDown = false, addonOk = false, studioProcUp = false;
     let wasConnected = false, bridgeBannerEl = null;
 
     function build() {
@@ -3125,8 +3122,8 @@
         // an EXISTING conversation (one that has turns) we did not start.
         if (bridgeOk) {
           toneClass = "standby";
-          msg = blenderLive ? `Standby (Studio + Blender ready).` : `Standby. Start the agent, or just chat.`;
-          label = blenderLive ? "▶︎ Start Studio + Blender" : "▶︎ Start Roblox agent"; kind = "start";
+          msg = `Standby. Start the agent, or just chat.`;
+          label = "▶︎ Start Roblox agent"; kind = "start";
         } else if (addonOk) {
           // Roblox is down but another MCP server is live: allow a DEGRADED start
           // (yellow). The agent runs on the other server(s); Roblox tools stay
@@ -3134,12 +3131,10 @@
           toneClass = "warn"; warn = true;
           msg = !A.bridge.connected
             ? `Open <b>ZeroScript.vbs</b> on your PC.`
-            : blenderLive
-              ? `<b>Blender ready</b> · Roblox Studio offline.`
-              : studioProcUp
-                ? `<b>Studio open but not connected</b> - open <b>Assistant Settings &gt; MCP Servers</b> in Studio, or start without it.`
-                : `<b>Roblox Studio offline</b> - start with your other MCP server(s).`;
-          label = blenderLive ? "▶︎ Start Blender agent" : "▶︎ Start agent (Roblox offline)"; kind = "start-degraded";
+            : studioProcUp
+              ? `<b>Studio open but not connected</b> - open <b>Assistant Settings &gt; MCP Servers</b> in Studio, or start without it.`
+              : `<b>Roblox Studio offline</b> - start with your other MCP server(s).`;
+          label = "▶︎ Start agent (Roblox offline)"; kind = "start-degraded";
         } else {
           toneClass = "warn"; warn = true;
           msg = !A.bridge.connected
@@ -3287,16 +3282,7 @@
       // Roblox itself is down but such a server is present, the session can still
       // start in a DEGRADED mode - the agent just can't touch Roblox until Studio
       // is back. Gated on s.connected so a dropped bridge never reads as usable.
-      // For the built-in "blender" server, require live Blender socket connectivity
-      // when reported by the bridge so a closed Blender doesn't look ready.
-      blenderLive = !!(s.connected && s.blender && s.blender.connected);
-      addonOk = !!s.connected && servers.some((x) => {
-        if (x.id === "roblox" || !x.alive || (x.tools || 0) <= 0) return false;
-        if (x.id === "blender" && s.blender && typeof s.blender.connected === "boolean") {
-          return s.blender.connected;
-        }
-        return true;
-      });
+      addonOk = !!s.connected && servers.some((x) => x.id !== "roblox" && x.alive && (x.tools || 0) > 0);
       // Bridge-drop alert: a clear, persistent red banner the moment a
       // previously-connected bridge goes offline. Clears on reconnect.
       if (wasConnected && !s.connected) bridgeAlert(true);

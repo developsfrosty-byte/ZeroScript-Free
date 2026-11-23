@@ -14,13 +14,14 @@
     skillFilter: "All",
     provFilter: "All",
     actFilter: "all",
-    actServerFilter: "all",
     editingId: null,
     motion: true,
     accent: "indigo",
+    liquidGlass: true,
+    backdrop: "sunset",
     glass: "liquid",
   };
-  const _sig = { pinned: "", providers: "", presets: "", starter: "", custom: "", servers: "", tools: "", activity: "", blender: "" };
+  const _sig = { pinned: "", providers: "", presets: "", starter: "", custom: "", servers: "", tools: "", activity: "" };
 
   // ── Smooth rAF Ambient Motion & Liquid Glass Pointer Sheen ────────────
   function startAmbientCanvas() {
@@ -130,15 +131,24 @@
 
   function applyTheme(settings) {
     const accent = (settings && settings.accentTheme) || "indigo";
+    const liquidGlass = !settings || settings.liquidGlass !== false;
+    const backdrop = (settings && settings.liquidBackdrop) || "sunset";
     const glass = (settings && settings.glassStyle) || "liquid";
     state.accent = accent;
+    state.liquidGlass = liquidGlass;
+    state.backdrop = backdrop;
     state.glass = glass;
     state.motion = !settings || settings.ambientMotion !== false;
     document.documentElement.setAttribute("data-accent", accent);
+    document.documentElement.setAttribute("data-liquid", liquidGlass ? "on" : "off");
+    document.documentElement.setAttribute("data-backdrop", backdrop);
     document.documentElement.setAttribute("data-glass", glass);
     document.documentElement.setAttribute("data-motion", state.motion ? "on" : "off");
     $$("[data-accent-pick]").forEach((b) =>
       b.classList.toggle("active", b.dataset.accentPick === accent)
+    );
+    $$("[data-backdrop-pick]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.backdropPick === backdrop)
     );
     $$("[data-glass-pick]").forEach((b) =>
       b.classList.toggle("active", b.dataset.glassPick === glass)
@@ -168,13 +178,12 @@
 
   // ── Navigation ────────────────────────────────────────────────────────
   const VIEW_META = {
-    home: { eyebrow: "— HOME", sub: "Bridge online. Pick an AI, equip playbooks, build in Studio or Blender." },
-    blender: { eyebrow: "— BLENDER 3D", sub: "1-click Blender add-on bridge, live scene telemetry, viewport preview & Roblox export." },
+    home: { eyebrow: "— HOME", sub: "Bridge online. Pick an AI, equip playbooks, build." },
     activity: { eyebrow: "— ACTIVITY", sub: "Real-time inspector for every MCP tool call executed by your AIs." },
-    environment: { eyebrow: "— SKILLS", sub: "10 AAA Roblox & Blender playbooks, 1-click preset packs, and custom .md skills." },
+    environment: { eyebrow: "— SKILLS", sub: "13 AAA Roblox Studio playbooks for 1:1 cloning, animations, UI, combat & more." },
     prompts: { eyebrow: "— PROMPTS", sub: "Global instructions synced across all 12 AIs plus reusable developer templates." },
-    connections: { eyebrow: "— CONNECTIONS", sub: "Health Doctor diagnostics, MCP processes, and live command browser." },
-    settings: { eyebrow: "— SETTINGS", sub: "Personalize Liquid Glass surface, accent theme, motion, and tray behavior." },
+    connections: { eyebrow: "— CONNECTIONS", sub: "Health Doctor diagnostics, MCP processes, and live Studio command browser." },
+    settings: { eyebrow: "— SETTINGS", sub: "Personalize Liquid Glass mode, scenic backdrop, accent theme, and tray behavior." },
   };
 
   function switchView(view) {
@@ -186,14 +195,13 @@
       const name = (state.status && state.status.settings && state.status.settings.userName) || "Builder";
       $("#page-title").textContent = `${greetingPrefix()}, ${name}`;
     } else {
-      const titles = { blender: "Blender 3D Hub", environment: "Skills & Playbooks", connections: "Connections & Doctor", prompts: "Prompt Studio", activity: "Live Activity", settings: "Settings" };
+      const titles = { environment: "Skills & Playbooks", connections: "Connections & Doctor", prompts: "Prompt Studio", activity: "Live Activity", settings: "Settings" };
       $("#page-title").textContent = titles[view] || (view.charAt(0).toUpperCase() + view.slice(1));
     }
     $("#page-sub").textContent = meta.sub;
     if (view === "environment") loadSkills();
     if (view === "activity") loadActivity();
     if (view === "connections" && !state.diagnostics) runDiagnostics();
-    if (view === "blender" && state.status) renderBlender(state.status.blender || {}, state.status.starterPrompts || []);
   }
 
   function switchSubtab(name) {
@@ -208,7 +216,6 @@
 
     const br = s.bridge || {};
     const st = s.studio || {};
-    const bl = s.blender || {};
     const servers = s.servers || [];
     const tools = s.tools || [];
     const settings = s.settings || {};
@@ -231,6 +238,7 @@
     if (document.activeElement !== $("#global-prompt-input")) {
       $("#global-prompt-input").value = settings.globalPrompt || "";
     }
+    $("#set-liquid-glass").checked = settings.liquidGlass !== false;
     $("#set-motion").checked = settings.ambientMotion !== false;
     $("#set-tray").checked = settings.minimizeToTray !== false;
     $("#set-autoopen").checked = settings.autoOpenWindow !== false;
@@ -269,28 +277,7 @@
     }
 
     $("#diag-tabs").textContent = `${br.clients || 0} active tab(s)`;
-    const studioToolsCount = tools.filter((t) => (t.server || "roblox") === "roblox").length;
-    const blToolsCount = tools.filter((t) => t.server === "blender").length;
-    $("#diag-tools-sub").textContent = `${studioToolsCount} commands`;
-    const stDot = $("#diag-studio-dot");
-    if (stDot) stDot.className = `dot-sm ${st.place === true ? "" : st.app === true ? "warn" : "off"}`;
-
-    const blDot = $("#diag-blender-dot");
-    const navBlDot = $("#nav-blender-dot");
-    if (bl.connected) {
-      if (blDot) blDot.className = "dot-sm";
-      if (navBlDot) navBlDot.className = "nav-dot-mini on";
-      $("#diag-blender-sub").textContent = `${bl.objects || 0} objs · ${blToolsCount || bl.serverTools || 11} cmds`;
-    } else if (bl.addonInstalled && bl.serverConfigured) {
-      if (blDot) blDot.className = "dot-sm warn";
-      if (navBlDot) navBlDot.className = "nav-dot-mini warn";
-      $("#diag-blender-sub").textContent = "Add-on ready (closed)";
-    } else {
-      if (blDot) blDot.className = "dot-sm off";
-      if (navBlDot) navBlDot.className = "nav-dot-mini";
-      $("#diag-blender-sub").textContent = bl.installations && bl.installations.length ? "Click to setup" : "Not detected";
-    }
-
+    $("#diag-tools-sub").textContent = `${tools.length} commands`;
     $("#hero-uptime").textContent = `UPTIME ${formatUptime(br.uptime)}`;
     const enabledSkills = (s.skills || []).filter((sk) => sk.enabled).length;
     $("#hero-skills-pill").textContent = `${enabledSkills} SKILLS READY`;
@@ -301,10 +288,7 @@
     animateCount($("#kpi-commands"), tools.length);
     if (st.place === true) {
       $("#kpi-studio").textContent = "Connected";
-      $("#kpi-studio-sub").textContent = bl.connected ? "Studio + Blender both live." : "Place active and ready.";
-    } else if (bl.connected) {
-      $("#kpi-studio").textContent = "Blender Live";
-      $("#kpi-studio-sub").textContent = `Blender ${bl.version || ""} ready · Studio offline.`;
+      $("#kpi-studio-sub").textContent = "Place active and ready.";
     } else if (st.app === true) {
       $("#kpi-studio").textContent = "No place";
       $("#kpi-studio-sub").textContent = "Open a place in Roblox Studio.";
@@ -313,7 +297,7 @@
       $("#kpi-studio-sub").textContent = "Open Assistant Settings > MCP Servers.";
     } else {
       $("#kpi-studio").textContent = "Waiting";
-      $("#kpi-studio-sub").textContent = "Open Roblox Studio or Blender.";
+      $("#kpi-studio-sub").textContent = "Open Roblox Studio & a place.";
     }
 
     animateCount($("#kpi-activity"), stats.total || 0);
@@ -328,7 +312,6 @@
     renderPresets(s.presets || []);
     renderPrompts(s.starterPrompts || [], settings.customPrompts || []);
     renderConnections(servers, tools);
-    renderBlender(bl, s.starterPrompts || []);
   }
 
   function renderPinnedProviders(providers, favIds) {
@@ -419,11 +402,10 @@
     const filtered = (state.activity.items || []).filter((it) => {
       if (state.actFilter === "ok" && !it.ok) return false;
       if (state.actFilter === "err" && it.ok) return false;
-      if (state.actServerFilter !== "all" && (it.server || "roblox") !== state.actServerFilter) return false;
       if (q && !`${it.tool} ${it.server} ${it.args} ${it.preview}`.toLowerCase().includes(q)) return false;
       return true;
     });
-    const sig = `${state.actFilter}|${state.actServerFilter}|${q}|${filtered.map((it) => `${it.id}:${it.ok ? 1 : 0}:${state.expandedActs.has(it.id) ? 1 : 0}`).join(",")}`;
+    const sig = `${state.actFilter}|${q}|${filtered.map((it) => `${it.id}:${it.ok ? 1 : 0}:${state.expandedActs.has(it.id) ? 1 : 0}`).join(",")}`;
     if (sig === _sig.activity) return;
     _sig.activity = sig;
 
@@ -655,69 +637,6 @@
     }
   }
 
-  // ── Blender 3D Hub ────────────────────────────────────────────────────
-  function renderBlender(bl, starterPrompts) {
-    const sig = JSON.stringify({ bl, n: (starterPrompts || []).length });
-    if (sig === _sig.blender) return;
-    _sig.blender = sig;
-
-    const pill = $("#bl-status-pill");
-    const pillTxt = $("#bl-status-txt");
-    if (pill && pillTxt) {
-      pill.classList.remove("warn", "off");
-      if (bl.connected) {
-        pillTxt.textContent = "LIVE CONNECTED";
-      } else if (bl.addonInstalled && bl.serverConfigured) {
-        pill.classList.add("warn");
-        pillTxt.textContent = bl.blenderRunning ? "RESTART BLENDER" : "READY · OPEN BLENDER";
-      } else {
-        pill.classList.add("off");
-        pillTxt.textContent = "SETUP NEEDED";
-      }
-    }
-
-    $("#bl-ver").textContent = bl.version || "—";
-    $("#bl-scene").textContent = bl.scene || "—";
-    $("#bl-objs").textContent = String(bl.objects || 0);
-    $("#bl-active").textContent = bl.activeObject || "—";
-
-    const toggleBtn = $("#btn-bl-toggle");
-    if (toggleBtn) {
-      toggleBtn.textContent = bl.serverConfigured ? "DISABLE MCP" : "ENABLE MCP";
-      toggleBtn.dataset.enabled = bl.serverConfigured ? "1" : "0";
-    }
-
-    const listEl = $("#bl-installs-list");
-    if (listEl) {
-      const installs = bl.installations || [];
-      listEl.innerHTML = installs.length
-        ? installs.map((ins) => `
-            <div class="bl-install-row">
-              <div>
-                <div class="bl-install-ver">Blender ${esc(ins.version)}</div>
-                <div class="bl-install-path">${esc(ins.exe)}</div>
-              </div>
-              <span class="tag ${ins.addonInstalled ? "green" : "amber"}">${ins.addonInstalled ? "Add-on Installed" : "Not Installed"}</span>
-            </div>
-          `).join("")
-        : `<div class="sec-sub">No Blender 3.6+ installation found automatically. Install Blender or copy <code>blender_addon/zeroscript_blender_addon.py</code> manually.</div>`;
-    }
-
-    const qBox = $("#bl-quick-prompts");
-    if (qBox) {
-      const blPrompts = (starterPrompts || []).filter((p) => (p.category || "").toLowerCase() === "blender");
-      qBox.innerHTML = blPrompts.map((p) => `
-        <div class="bl-install-row">
-          <div style="min-width:0">
-            <div class="bl-install-ver">${esc(p.title)}</div>
-            <div class="bl-install-path">${esc(p.text.slice(0, 110))}...</div>
-          </div>
-          <button class="btn-outline sm" data-copy-bl-prompt="${esc(p.id)}">COPY</button>
-        </div>
-      `).join("");
-    }
-  }
-
   // ── Command Palette (Ctrl+K) ──────────────────────────────────────────
   let _paletteIndex = 0;
   function openPalette() {
@@ -732,20 +651,25 @@
   function buildPaletteEntries() {
     const out = [
       { title: "Go to Home Overview", sub: "Navigation", badge: "VIEW", run: () => { switchView("home"); switchSubtab("overview"); } },
-      { title: "Go to Blender 3D Hub", sub: "1-click add-on setup, live scene & preview", badge: "BLENDER", run: () => switchView("blender") },
       { title: "Go to Live Activity Inspector", sub: "Inspect MCP tool calls", badge: "VIEW", run: () => switchView("activity") },
-      { title: "Go to Skills & Presets", sub: "Manage 10+ AI playbooks", badge: "VIEW", run: () => switchView("environment") },
+      { title: "Go to Skills & Presets", sub: "Manage 13 AAA AI playbooks", badge: "VIEW", run: () => switchView("environment") },
       { title: "Go to Prompt Studio", sub: "Global instructions & starter prompts", badge: "VIEW", run: () => switchView("prompts") },
       { title: "Go to Connections & Health Doctor", sub: "MCP servers, commands & diagnostics", badge: "VIEW", run: () => { switchView("connections"); runDiagnostics(); } },
-      { title: "Go to Settings & Liquid Glass", sub: "Glass style, accent colors, tray & folders", badge: "VIEW", run: () => switchView("settings") },
-      { title: "Install & Enable Blender Add-on (1-Click)", sub: "Auto-install into detected Blender versions", badge: "BLENDER", run: () => { switchView("blender"); $("#btn-bl-install").click(); } },
-      { title: "Launch Blender Desktop App", sub: "Start Blender with ZeroScript bridge", badge: "BLENDER", run: () => $("#btn-bl-launch").click() },
-      { title: "Capture Blender Viewport Preview", sub: "Live 3D viewport snapshot", badge: "BLENDER", run: () => { switchView("blender"); $("#btn-bl-preview").click(); } },
-      { title: "Refresh Bridge, Studio & Blender Status", sub: "Action", badge: "ACTION", run: () => refreshNow() },
+      { title: "Go to Settings & Liquid Glass", sub: "Liquid Glass mode, backdrops & themes", badge: "VIEW", run: () => switchView("settings") },
+      { title: `${state.liquidGlass ? "Disable" : "Enable"} Liquid Glass Mode`, sub: "Toggle translucent blown-glass UI", badge: "GLASS", run: () => api("/api/settings", { liquidGlass: !state.liquidGlass }).then((r) => { if (r.ok && state.status) { state.status.settings = r.settings; applyTheme(r.settings); $("#set-liquid-glass").checked = r.settings.liquidGlass; toast(`Liquid Glass ${r.settings.liquidGlass ? "enabled" : "disabled"}.`); } }) },
+      { title: "Refresh Bridge & Studio Status", sub: "Action", badge: "ACTION", run: () => refreshNow() },
       { title: "Restart Roblox MCP Proxy", sub: "Action", badge: "ACTION", run: () => api("/api/restart_mcp", { server: "roblox" }).then((r) => { if (r.ok) renderStatus(r); toast("Roblox MCP restarted."); }) },
       { title: "Open Chrome Extension Folder", sub: "Load unpacked extension", badge: "FOLDER", run: () => api("/api/open_folder", { folder: "extension" }) },
       { title: "Open Bridge Logs Drawer", sub: "Telemetry", badge: "LOGS", run: () => { $("#logs-drawer").hidden = false; loadLogs(); } },
     ];
+    for (const bd of ["sunset", "aurora", "ocean", "midnight"]) {
+      out.push({
+        title: `Liquid Backdrop: ${bd.charAt(0).toUpperCase() + bd.slice(1)}`,
+        sub: "Switch scenic atmospheric refraction backdrop",
+        badge: "BACKDROP",
+        run: () => api("/api/settings", { liquidGlass: true, liquidBackdrop: bd }).then((r) => { if (r.ok && state.status) { state.status.settings = r.settings; applyTheme(r.settings); toast(`Backdrop: ${bd}`); } }),
+      });
+    }
     for (const gs of ["liquid", "frosted", "crystal"]) {
       out.push({
         title: `Glass Style: ${gs.charAt(0).toUpperCase() + gs.slice(1)}`,
@@ -815,7 +739,7 @@
   async function refreshNow() {
     const btn = $("#btn-refresh-top");
     if (btn) btn.classList.add("is-spinning");
-    toast("Refreshing Studio, Blender & MCP connections...");
+    toast("Refreshing Studio & MCP connections...");
     try {
       const res = await api("/api/refresh", {});
       renderStatus(res);
@@ -842,7 +766,6 @@
   $$(".subtab").forEach((b) => b.addEventListener("click", () => switchSubtab(b.dataset.subtab)));
 
   $("#cta-browse-providers").addEventListener("click", () => { switchView("home"); switchSubtab("providers"); });
-  $("#cta-open-blender").addEventListener("click", () => switchView("blender"));
   $("#cta-open-skills").addEventListener("click", () => switchView("environment"));
   $("#quick-skills").addEventListener("click", () => switchView("environment"));
   $("#quick-prompts").addEventListener("click", () => switchView("prompts"));
@@ -966,14 +889,6 @@
       return;
     }
 
-    const copyBlPrompt = e.target.closest("[data-copy-bl-prompt]");
-    if (copyBlPrompt) {
-      const pid = copyBlPrompt.dataset.copyBlPrompt;
-      const item = ((state.status && state.status.starterPrompts) || []).find((x) => x.id === pid);
-      if (item) copyText(item.text, "Blender prompt copied — paste into any AI chat!");
-      return;
-    }
-
     const toggleAct = e.target.closest("[data-toggle-act]");
     if (toggleAct) {
       const aid = Number(toggleAct.dataset.toggleAct);
@@ -1065,8 +980,19 @@
       const accent = sw.dataset.accentPick;
       const res = await api("/api/settings", { accentTheme: accent });
       if (res && res.ok && state.status) state.status.settings = res.settings;
-      applyTheme({ accentTheme: accent, glassStyle: state.glass, ambientMotion: state.motion });
+      applyTheme({ accentTheme: accent, liquidGlass: state.liquidGlass, liquidBackdrop: state.backdrop, glassStyle: state.glass, ambientMotion: state.motion });
       toast(`Accent theme: ${accent}`);
+      return;
+    }
+
+    const bd = e.target.closest("[data-backdrop-pick]");
+    if (bd) {
+      const liquidBackdrop = bd.dataset.backdropPick;
+      const res = await api("/api/settings", { liquidGlass: true, liquidBackdrop });
+      if (res && res.ok && state.status) state.status.settings = res.settings;
+      $("#set-liquid-glass").checked = true;
+      applyTheme({ accentTheme: state.accent, liquidGlass: true, liquidBackdrop, glassStyle: state.glass, ambientMotion: state.motion });
+      toast(`Liquid backdrop: ${liquidBackdrop}`);
       return;
     }
 
@@ -1075,7 +1001,7 @@
       const glassStyle = gs.dataset.glassPick;
       const res = await api("/api/settings", { glassStyle });
       if (res && res.ok && state.status) state.status.settings = res.settings;
-      applyTheme({ accentTheme: state.accent, glassStyle, ambientMotion: state.motion });
+      applyTheme({ accentTheme: state.accent, liquidGlass: state.liquidGlass, liquidBackdrop: state.backdrop, glassStyle, ambientMotion: state.motion });
       toast(`Glass style: ${glassStyle}`);
     }
   });
@@ -1109,14 +1035,6 @@
       renderActivity();
     });
   });
-  $$("#activity-server-filters .filter-pill").forEach((b) => {
-    b.addEventListener("click", () => {
-      $$("#activity-server-filters .filter-pill").forEach((x) => x.classList.remove("active"));
-      b.classList.add("active");
-      state.actServerFilter = b.dataset.asrv;
-      renderActivity();
-    });
-  });
   $("#btn-export-activity").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(state.activity, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -1128,82 +1046,12 @@
   });
   $("#activity-search").addEventListener("input", renderActivity);
 
-  // Blender Hub actions
-  $("#btn-bl-install").addEventListener("click", async () => {
-    const msg = $("#bl-action-msg");
-    msg.classList.remove("err");
-    msg.textContent = "Installing & enabling ZeroScript add-on in Blender...";
-    const res = await api("/api/blender/install_addon", {});
-    if (res && res.ok) {
-      _sig.blender = "";
-      renderStatus(res);
-      const vers = (res.installed || []).map((x) => x.version).join(", ");
-      const running = res.blenderRunning || (res.blender && res.blender.blenderRunning);
-      msg.textContent = running
-        ? `Installed & enabled in Blender ${vers || ""}. Restart your open Blender window to activate the updated add-on!`
-        : `Installed & enabled in Blender ${vers || ""}. Open Blender to connect live!`;
-      toast("Blender add-on installed & enabled!");
-    } else {
-      msg.classList.add("err");
-      msg.textContent = (res && res.error) || "Add-on install failed.";
-    }
-  });
-  $("#btn-bl-launch").addEventListener("click", async () => {
-    const res = await api("/api/blender/launch", {});
-    if (res && res.ok) {
-      toast("Launching Blender...");
-      setTimeout(tick, 3000);
-    } else {
-      toast((res && res.error) || "Could not launch Blender.");
-    }
-  });
-  $("#btn-bl-toggle").addEventListener("click", async () => {
-    const enabled = $("#btn-bl-toggle").dataset.enabled !== "1";
-    const res = await api("/api/blender/toggle", { enabled });
-    if (res && res.ok) {
-      _sig.blender = "";
-      renderStatus(res);
-      toast(enabled ? "Blender MCP enabled." : "Blender MCP disabled.");
-    } else {
-      toast((res && res.error) || "Failed to toggle Blender MCP.");
-    }
-  });
-  $("#btn-bl-test").addEventListener("click", async () => {
-    const msg = $("#bl-action-msg");
-    const port = (state.status && state.status.blender && state.status.blender.port) || 17615;
-    msg.classList.remove("err");
-    msg.textContent = `Probing Blender on 127.0.0.1:${port}...`;
-    const res = await api("/api/blender/status");
-    if (res && res.ok && res.blender) {
-      if (state.status) state.status.blender = res.blender;
-      _sig.blender = "";
-      renderBlender(res.blender, (state.status && state.status.starterPrompts) || []);
-      if (res.blender.connected) {
-        msg.textContent = `Connected to Blender ${res.blender.version} (${res.blender.scene}, ${res.blender.objects} objects).`;
-        toast("Blender bridge connected!");
-      } else {
-        msg.classList.add("err");
-        msg.textContent = res.blender.blenderRunning
-          ? `Blender is open, but the ZeroScript add-on isn't active on port ${res.blender.port || port} yet — restart Blender (or press N in View3D → ZeroScript → Start Bridge).`
-          : `Blender is not responding on port ${res.blender.port || port} yet — open Blender first.`;
-      }
-    }
-  });
-  $("#btn-bl-preview").addEventListener("click", async () => {
-    const msg = $("#bl-action-msg");
-    msg.classList.remove("err");
-    msg.textContent = "Capturing Blender viewport...";
-    const res = await api("/api/blender/preview", { shading: $("#bl-shading").value, max_size: 800 });
-    if (res && res.ok && res.image_b64) {
-      const img = $("#bl-preview-img");
-      img.src = `data:${res.mime_type || "image/png"};base64,${res.image_b64}`;
-      img.hidden = false;
-      $("#bl-preview-empty").hidden = true;
-      msg.textContent = `Captured ${res.mode || "viewport"} (${res.width}x${res.height}).`;
-    } else {
-      msg.classList.add("err");
-      msg.textContent = (res && res.error) || "Could not capture viewport.";
-    }
+  $("#set-liquid-glass").addEventListener("change", async (e) => {
+    const liquidGlass = e.target.checked;
+    const res = await api("/api/settings", { liquidGlass });
+    if (res && res.ok && state.status) state.status.settings = res.settings;
+    applyTheme({ accentTheme: state.accent, liquidGlass, liquidBackdrop: state.backdrop, glassStyle: state.glass, ambientMotion: state.motion });
+    toast(`Liquid Glass ${liquidGlass ? "enabled" : "disabled"}.`);
   });
 
   $$("#skill-filters .filter-pill").forEach((b) => {
@@ -1361,6 +1209,9 @@
     e.preventDefault();
     const res = await api("/api/settings", {
       userName: $("#set-username").value.trim(),
+      liquidGlass: $("#set-liquid-glass").checked,
+      liquidBackdrop: state.backdrop,
+      glassStyle: state.glass,
       ambientMotion: $("#set-motion").checked,
       minimizeToTray: $("#set-tray").checked,
       autoOpenWindow: $("#set-autoopen").checked,

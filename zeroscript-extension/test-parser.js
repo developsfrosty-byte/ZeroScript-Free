@@ -108,24 +108,3 @@ ok("no dsml false positive on prose",
    !ZSParse.DSML_RE.test("I considered the DSML invoke and parameter tags, but used JSON instead."));
 ok("no dsml false positive on a real command",
    !ZSParse.DSML_RE.test('{"command": "script_read", "params": {"target_file": "x"}}'));
-
-// ── Blender raw Python blocks (###BLENDER### ... ###END_BLENDER###) ────────
-const blBlock = ZSParse.parseToolCalls("###BLENDER###\nimport bpy\nprint(len(bpy.data.objects))\n###END_BLENDER###");
-ok("blender block", blBlock.length === 1 && blBlock[0].tool === "blender_execute_python" && blBlock[0].arguments.code.includes("import bpy"));
-
-const blSpaced = ZSParse.parseToolCalls("### blender ###\nresult = 42\n### end_blender ###");
-ok("markdown-mangled blender markers", blSpaced.length === 1 && blSpaced[0].tool === "blender_execute_python" && blSpaced[0].arguments.code === "result = 42");
-
-const pyAlias = ZSParse.parseToolCalls("###PY###\nx = 1\n###END_PY###");
-ok("py alias block", pyAlias.length === 1 && pyAlias[0].tool === "blender_execute_python" && pyAlias[0].arguments.code === "x = 1");
-
-const blChrome = ZSParse.parseToolCalls("###blender### python import bpy\nresult = 1\n###END_BLENDER###");
-ok("strips python chrome from blender block", blChrome.length === 1 && blChrome[0].arguments.code.startsWith("import bpy"));
-
-const blJsonWrapped = ZSParse.parseToolCalls('{"command":"blender_execute_python","params":{"code":"###BLENDER###\\nimport bpy\\n###END_BLENDER###"}}');
-ok("cleans markers inside JSON-wrapped blender call", blJsonWrapped.length === 1 && blJsonWrapped[0].arguments.code === "import bpy");
-
-ok("open blender block detected", ZSParse.hasOpenToolBlock("###BLENDER###\nimport bpy") === true);
-ok("closed blender block not open", ZSParse.hasOpenToolBlock("###BLENDER###\nimport bpy\n###END_BLENDER###") === false);
-ok("blender tool name mid-stream", ZSParse.toolNameFromText("###BLENDER###\nimport bpy") === "blender_execute_python");
-ok("blender block has command shape", ZSParse.hasCommandShape("###BLENDER###\nx=1\n###END_BLENDER###") === true);

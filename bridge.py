@@ -39,11 +39,6 @@ except Exception:
     _studio_scan = None
 
 try:
-    import blender_mcp as _blender_mcp
-except Exception:
-    _blender_mcp = None
-
-try:
     import websockets
 except ImportError:
     print("[bridge] Missing dependency. Run:  pip install websockets")
@@ -1430,16 +1425,6 @@ def probe_studio():
     return {"app": True, "place": place}
 
 
-def probe_blender():
-    """Fast live TCP probe against the ZeroScript Blender add-on, or None if unavailable."""
-    if _blender_mcp is None:
-        return {"connected": False, "installations": [], "addonInstalled": False}
-    try:
-        return _blender_mcp.probe_blender(timeout=0.7)
-    except Exception:
-        return {"connected": False, "installations": [], "addonInstalled": False}
-
-
 def safe_call(name, arguments, timeout):
     """Never raises. Always returns a dict the extension can feed back to DeepSeek."""
     try:
@@ -1496,7 +1481,6 @@ async def broadcast_status():
     try:
         _st = await asyncio.to_thread(probe_studio)
         _proc = await asyncio.to_thread(_roblox_studio_app_running)
-        _bl = await asyncio.to_thread(probe_blender)
         payload = json.dumps({
             "type": "connected",
             "mcp_alive": mgr.any_alive(),
@@ -1505,7 +1489,6 @@ async def broadcast_status():
             # extension word the corrective step correctly ("open the MCP
             # panel in your already-open Studio" vs "launch Studio").
             "studio_proc": _proc,
-            "blender": _bl,
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
             "skills": skills_manager.list_summary(),
@@ -1532,7 +1515,6 @@ async def handler(ws):
             "mcp_alive": mgr.any_alive(),
             "studio": _st["place"], "studio_app": _st["app"],
             "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
-            "blender": await asyncio.to_thread(probe_blender),
             "servers": mgr.health(),
             "tools": mgr.list_tools(),
             "skills": skills_manager.list_summary(),
@@ -1556,7 +1538,6 @@ async def handler(ws):
                     "type": "studio_status", "id": rid,
                     "studio": studio["place"], "studio_app": studio["app"],
                     "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
-                    "blender": await asyncio.to_thread(probe_blender),
                     "mcp_alive": mgr.any_alive(),
                 }))
 
@@ -1572,7 +1553,6 @@ async def handler(ws):
                     "tools": tools, "mcp_alive": mgr.any_alive(),
                     "studio": _st["place"], "studio_app": _st["app"],
                     "studio_proc": await asyncio.to_thread(_roblox_studio_app_running),
-                    "blender": await asyncio.to_thread(probe_blender),
                     "servers": mgr.health(),
                     "skills": skills_manager.list_summary(),
                     "globalPrompt": skills_manager.load_settings().get("globalPrompt", ""),

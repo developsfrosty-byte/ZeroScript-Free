@@ -23,12 +23,11 @@ const ZS = (() => {
   function toolCategory(name) {
     const n = (name || "").includes("/") ? name.split("/").pop() : (name || "");
     if (n === "list_commands" || n === "list_tools" || n === "list_skills" || n === "read_skill" || n === "get_skill") return "read";
-    if (/^(script_read|script_search|script_grep|search_game_tree|inspect_instance|get_studio_state|get_console_output|search_creator_store|list_roblox_studios|blender_get_scene_info|blender_get_object_info)$/.test(n))
+    if (/^(script_read|script_search|script_grep|search_game_tree|inspect_instance|get_studio_state|get_console_output|search_creator_store|list_roblox_studios)$/.test(n))
       return "read";
-    if (/^(multi_edit|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau" ||
-        /^(blender_execute_python|blender_create_primitive|blender_transform_object|blender_set_material|blender_add_modifier|blender_export_asset|blender_import_asset)$/.test(n))
+    if (/^(multi_edit|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau")
       return "edit";
-    if (n === "screen_capture" || n === "blender_capture_viewport" || n === "blender_render_scene") return "screen";
+    if (n === "screen_capture") return "screen";
     if (/^generate_/.test(n)) return "generate";
     if (n.startsWith("roblox") || /studio|luau|instance|workspace/i.test(n)) return "roblox";
     return "tool";
@@ -48,19 +47,10 @@ const ZS = (() => {
       // other command (e.g. execute_blender_code) the ###LUA### hint is wrong and
       // misleading - a model that followed it would ship its code to the wrong MCP
       // - so drop it and keep the JSON-only guidance.
-      const isLua = !toolName || toolName === "command" || toolName === "execute_luau";
-      const isBlenderPy = toolName === "blender_execute_python";
-      const luaMalformed = isBlenderPy
-        ? " (or use the ###BLENDER### / ###END_BLENDER### block for blender_execute_python)"
-        : isLua
-          ? " (or use the ###LUA### / ###END_LUA### block for execute_luau)"
-          : "";
-      const luaUnclosed = isBlenderPy
-        ? " (or a complete ###BLENDER### ... ###END_BLENDER### block for blender_execute_python)"
-        : isLua
-          ? " (or a complete ###LUA### ... ###END_LUA### block for execute_luau)"
-          : "";
-      const objAlt = (isLua || isBlenderPy) ? " (or ###...### block)" : "";
+      const otherCmd = toolName && toolName !== "command" && toolName !== "execute_luau";
+      const luaMalformed = otherCmd ? "" : " (or use the ###LUA### / ###END_LUA### block for execute_luau)";
+      const luaUnclosed = otherCmd ? "" : " (or a complete ###LUA### ... ###END_LUA### block for execute_luau)";
+      const objAlt = otherCmd ? "" : " (or ###...### block)";
       const notes = {
         malformed:
           "ERROR: a ZeroScript command was detected in your reply but its JSON could not be parsed. " +
@@ -76,10 +66,6 @@ const ZS = (() => {
           "ERROR: you wrote the closing ###END_LUA### marker but not the opening ###LUA### marker, " +
           "so the Luau block was not detected and did not run. Put ###LUA### immediately BEFORE your " +
           "code and ###END_LUA### after it. Please retry.",
-        blenderOpener:
-          "ERROR: you wrote the closing ###END_BLENDER### marker but not the opening ###BLENDER### marker, " +
-          "so the Blender Python block was not detected and did not run. Put ###BLENDER### immediately BEFORE your " +
-          "code and ###END_BLENDER### after it. Please retry.",
         envelope:
           "ERROR: you wrote a command's parameters as a bare JSON object, but without the required " +
           "envelope, so it was not recognised as a command. Wrap them like " +
@@ -222,7 +208,7 @@ ${BT}
 For example, to list every available command you would write ${BT}{"command": "list_commands"}${BT}.
 
 ━━━ SPECIAL FORMAT FOR execute_luau ━━━
-execute_luau is an exception to the JSON format above: you MUST use the ###LUA### block below, NEVER the {"command": "execute_luau", ...} JSON form. Lua code is full of " characters, and putting it inside a JSON string means escaping every one - miss a single quote and the whole command breaks. The ###LUA### block needs NO escaping and NO JSON, so this never happens.
+execute_luau is the ONE exception to the JSON format above: you MUST use the ###LUA### block below, NEVER the {"command": "execute_luau", ...} JSON form. Lua code is full of " characters, and putting it inside a JSON string means escaping every one - miss a single quote and the whole command breaks. The ###LUA### block needs NO escaping and NO JSON, so this never happens.
 The ###LUA### / ###END_LUA### markers AND the code all go INSIDE one fenced code block:
 ${BT}
 ###LUA###
@@ -230,16 +216,6 @@ ${BT}
 local x = "any string with quotes works fine"
 return "result"
 ###END_LUA###
-${BT}
-
-━━━ SPECIAL FORMAT FOR blender_execute_python ━━━
-When using the \`blender\` MCP server to run Python (\`bpy\` / \`bmesh\`) in Blender, ALWAYS use the \`###BLENDER###\` block below instead of JSON-wrapping code (same zero-escaping advantage as ###LUA###). Assign \`result = ...\` or use \`print()\` for output:
-${BT}
-###BLENDER###
-import bpy
-print("Objects:", len(bpy.data.objects))
-result = "done"
-###END_BLENDER###
 ${BT}
 
 RULES:
@@ -296,7 +272,7 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       const parts = ["\n\n━━━ AGENT SKILLS (PRO PLAYBOOKS) ━━━"];
       if (autoSkills.length) {
         parts.push(
-          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves UI/HUD, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
+          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves 1:1 game recreation/cloning, Motor6D/KeyframeSequence animations or procedural motion, character movement/parkour/camera feel, 1:1 map & biome design, UI/HUD, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
           autoSkills.map((s) => `- ${s.id} (${s.name}): ${s.tagline || s.category || "Pro playbook"}`).join("\n")
         );
       }
@@ -385,14 +361,6 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       "required'. Later steps may omit x/y and reuse the last position (click then scroll at the same spot). " +
       "mouseButtonDown/Up/Click need \"mouse_button\":\"left\" or \"right\". A \"wait\" step needs \"wait_time_ms\" (0-10000). " +
       "Example: {\"datamodel_type\":\"Client\",\"actions\":[{\"action\":\"mouseButtonClick\",\"mouse_button\":\"left\",\"instance_path\":\"LocalPlayer.PlayerGui.Menu.PlayBtn\"}]}.",
-    blender_execute_python:
-      "Use the fenced ###BLENDER### ... ###END_BLENDER### block instead of JSON-wrapping code. Runs on Blender's main thread with bpy, bmesh, " +
-      "mathutils, Vector, Euler, math, json, os pre-imported. Assign `result = ...` or print() for output. In Blender 4.1+, NEVER use " +
-      "mesh.use_auto_smooth (removed) — set `p.use_smooth = True` on polygons instead.",
-    blender_capture_viewport:
-      "Captures a live PNG preview of Blender's 3D viewport (or renders with a temporary camera in headless mode) and attaches the image directly so you can inspect silhouette, shading, and placement.",
-    blender_export_asset:
-      "Exports selected or scene meshes to .fbx, .glb, .gltf, or .obj (defaults to Roblox-ready FBX in ~/ZeroScript_Exports/) with transform apply and triangle-count check against Roblox's 10,000-tri MeshPart limit.",
   };
 
   // A short, clearly-labelled reminder of the available commands, injected under

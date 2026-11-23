@@ -22,30 +22,17 @@ function render(s) {
   const state = document.getElementById("state");
   const tools = document.getElementById("tools");
   const servers = document.getElementById("servers");
-  const blenderState = document.getElementById("blender-state");
   const list = s.servers || [];
   const up = list.filter((x) => x.alive).length;
   const mcpOk = s.connected && (s.mcpAlive || up > 0 || s.tools > 0);
   const studioOff = mcpOk && s.studio === false; // MCP up but no Studio attached
-  const blLive = !!(s.connected && s.blender && s.blender.connected);
   const ok = mcpOk && !studioOff;
-  dot.className = "dot " + (s.connected ? ((ok || blLive) ? "on" : "warn") : "");
+  dot.className = "dot " + (s.connected ? (ok ? "on" : "warn") : "");
   state.textContent = s.connected
-    ? (ok ? (blLive ? "Connected · Studio + Blender ready" : "Connected · Roblox Studio ready")
-        : blLive ? "Connected · Blender ready (Studio offline)"
+    ? (ok ? "Connected · Roblox Studio ready"
         : studioOff ? "Studio not connected · enable the MCP server in Studio"
         : "Bridge OK · open Roblox Studio")
     : "Bridge offline";
-  if (blenderState) {
-    if (s.connected && s.blender && (s.blender.connected || s.blender.addonInstalled || s.blender.serverConfigured)) {
-      blenderState.style.display = "";
-      blenderState.textContent = s.blender.connected
-        ? `Blender: ${s.blender.version || "Live"} (${s.blender.scene || "Scene"})`
-        : "Blender: Add-on ready (open Blender to connect)";
-    } else {
-      blenderState.style.display = "none";
-    }
-  }
   tools.textContent = s.connected ? `${s.tools || 0} tools available` : "Open ZeroScript desktop app";
   servers.textContent = s.connected
     ? list.map((x) => `${x.alive ? "●" : "○"} ${x.id} (${x.alive ? x.tools + " tools" : "down"})`).join("\n")

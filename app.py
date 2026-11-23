@@ -33,16 +33,11 @@ if sys.stderr is None:
 
 import bridge  # noqa: E402
 import skills_manager  # noqa: E402
-try:
-    import blender_mcp  # noqa: E402
-except Exception:
-    blender_mcp = None
 
 bridge.EMBEDDED_MODE = True
 
 UI_DIR = os.path.join(HERE, "app_ui")
 EXT_DIR = os.path.join(HERE, "zeroscript-extension")
-BLENDER_ADDON_DIR = os.path.join(HERE, "blender_addon")
 ICON_PATH = os.path.join(HERE, "assets", "icon.png")
 
 AI_PROVIDERS = [
@@ -68,22 +63,6 @@ _shutdown_requested = threading.Event()
 _studio_cache = {"place": None, "app": None, "proc": None, "ts": 0.0}
 _studio_lock = threading.Lock()
 _probe_running = False
-
-_blender_cache = {
-    "connected": False,
-    "version": "",
-    "scene": "",
-    "objects": 0,
-    "activeObject": None,
-    "filepath": "",
-    "port": 17615,
-    "installations": blender_mcp.find_blender_installations() if blender_mcp is not None else [],
-    "addonInstalled": False,
-    "ts": 0.0,
-}
-_blender_cache["addonInstalled"] = any(i.get("addonInstalled") for i in _blender_cache["installations"])
-_blender_lock = threading.Lock()
-_blender_probe_running = False
 
 try:
     from PyQt6.QtCore import QTimer  # type: ignore
@@ -117,40 +96,6 @@ def _maybe_refresh_studio_async():
     if age > 4.0 and not _probe_running:
         _probe_running = True
         threading.Thread(target=_run_studio_probe_sync, daemon=True).start()
-
-
-def _run_blender_probe_sync():
-    global _blender_probe_running
-    try:
-        bl = bridge.probe_blender()
-        with _blender_lock:
-            _blender_cache.update(bl or {})
-            _blender_cache["ts"] = time.time()
-    except Exception:
-        pass
-    finally:
-        _blender_probe_running = False
-
-
-def _maybe_refresh_blender_async():
-    global _blender_probe_running
-    with _blender_lock:
-        age = time.time() - _blender_cache["ts"]
-    if age > 4.0 and not _blender_probe_running:
-        _blender_probe_running = True
-        threading.Thread(target=_run_blender_probe_sync, daemon=True).start()
-
-
-def _blender_snapshot():
-    with _blender_lock:
-        snap = dict(_blender_cache)
-    snap.pop("ts", None)
-    cfg_servers = (bridge._read_config().get("mcpServers") or {})
-    bl_client = bridge.mgr.clients.get("blender")
-    snap["serverConfigured"] = "blender" in cfg_servers
-    snap["serverAlive"] = bool(bl_client and bl_client.is_alive())
-    snap["serverTools"] = len(bl_client.tools_cache) if bl_client else 0
-    return snap
 
 
 def _run_on_bridge_loop(coro, timeout=10.0):
@@ -263,33 +208,7 @@ def _build_diagnostics_payload():
         "detail": st_detail,
     })
 
-    # 6. Blender AI Bridge & Add-on
-    _run_blender_probe_sync()
-    bl = _blender_snapshot()
-    if bl.get("connected"):
-        bl_status = "ok"
-        bl_detail = (
-            f"Blender {bl.get('version') or ''} connected on port {bl.get('port', 17615)} "
-            f"(scene: {bl.get('scene') or 'Scene'}, {bl.get('objects', 0)} objects, {bl.get('serverTools', 0)} tools)."
-        )
-    elif bl.get("addonInstalled") and bl.get("serverConfigured"):
-        bl_status = "warn"
-        bl_detail = f"Blender add-on & MCP server installed — open/restart Blender to connect live on port {bl.get('port', 17615)}."
-    elif bl.get("installations"):
-        vers = ", ".join(i.get("version", "?") for i in bl["installations"])
-        bl_status = "warn"
-        bl_detail = f"Detected Blender ({vers}) — click 'Install & Enable Add-on' in the Blender tab for 1-click AI setup."
-    else:
-        bl_status = "warn"
-        bl_detail = "No local Blender installation detected (optional — install Blender 3.6+ anytime)."
-    checks.append({
-        "id": "blender",
-        "title": "Blender 3D AI Bridge",
-        "status": bl_status,
-        "detail": bl_detail,
-    })
-
-    # 7. Skills & Providers summary
+    # 6. Skills & Providers summary
     enabled_skills = sum(1 for sk in skills_manager.list_summary() if sk.get("enabled"))
     checks.append({
         "id": "skills",
@@ -308,10 +227,8 @@ def _build_diagnostics_payload():
 def _build_status_payload(force_probe=False):
     if force_probe:
         _run_studio_probe_sync()
-        _run_blender_probe_sync()
     else:
         _maybe_refresh_studio_async()
-        _maybe_refresh_blender_async()
 
     with _studio_lock:
         st_snap = {
@@ -319,7 +236,6 @@ def _build_status_payload(force_probe=False):
             "app": _studio_cache["app"],
             "proc": _studio_cache["proc"],
         }
-    bl_snap = _blender_snapshot()
 
     servers = []
     for sid, client in bridge.mgr.clients.items():
@@ -353,7 +269,6 @@ def _build_status_payload(force_probe=False):
             "uptime": max(0, int(time.time() - bridge.START_TIME)),
         },
         "studio": st_snap,
-        "blender": bl_snap,
         "servers": servers,
         "tools": tools,
         "skills": skills_manager.list_summary(),
@@ -365,7 +280,6 @@ def _build_status_payload(force_probe=False):
         "paths": {
             "root": HERE,
             "extension": EXT_DIR,
-            "blenderAddon": BLENDER_ADDON_DIR,
             "skills": skills_manager.SKILLS_DIR,
             "logs": bridge.LOGS_DIR,
         },
@@ -422,7 +336,6 @@ def _open_folder(which):
         "skills": skills_manager.SKILLS_DIR,
         "logs": bridge.LOGS_DIR,
         "extension": EXT_DIR,
-        "blender_addon": BLENDER_ADDON_DIR,
         "root": HERE,
     }
     target = mapping.get(which)
@@ -532,10 +445,6 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if path == "/api/diagnostics":
             return self._send_json(200, _build_diagnostics_payload())
-
-        if path == "/api/blender/status":
-            _run_blender_probe_sync()
-            return self._send_json(200, {"ok": True, "blender": _blender_snapshot()})
 
         return self._send_json(404, {"ok": False, "error": f"unknown route: {path}"})
 
@@ -667,61 +576,6 @@ class AppHandler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"ok": False, "error": err})
             return self._send_json(200, {"ok": True})
 
-        if path == "/api/blender/install_addon":
-            if blender_mcp is None:
-                return self._send_json(500, {"ok": False, "error": "blender_mcp module unavailable"})
-            res = blender_mcp.install_blender_addon(auto_enable=True)
-            if not res.get("ok"):
-                return self._send_json(400, res)
-            cfg_servers = (bridge._read_config().get("mcpServers") or {})
-            if "blender" not in cfg_servers:
-                ok_add, err_add = bridge.config_add_server("blender", "blender_mcp.py", [], None)
-                if ok_add:
-                    bridge.reload_servers()
-                else:
-                    res["serverWarning"] = err_add
-            elif not (bridge.mgr.clients.get("blender") and bridge.mgr.clients["blender"].is_alive()):
-                bridge.reload_servers()
-            _run_blender_probe_sync()
-            _run_on_bridge_loop(bridge.broadcast_status(), timeout=8.0)
-            bridge.log("Blender add-on installed and MCP bridge connected", "cy")
-            return self._send_json(200, {**res, **_build_status_payload(force_probe=False)})
-
-        if path == "/api/blender/toggle":
-            enabled = bool(body.get("enabled", True))
-            if enabled:
-                ok, err = bridge.config_add_server("blender", "blender_mcp.py", [], None)
-            else:
-                ok, err = bridge.config_remove_server("blender")
-            if not ok:
-                return self._send_json(400, {"ok": False, "error": err})
-            bridge.reload_servers()
-            _run_blender_probe_sync()
-            _run_on_bridge_loop(bridge.broadcast_status(), timeout=8.0)
-            return self._send_json(200, {"ok": True, **_build_status_payload(force_probe=False)})
-
-        if path == "/api/blender/launch":
-            if blender_mcp is None:
-                return self._send_json(500, {"ok": False, "error": "blender_mcp module unavailable"})
-            exe_path = (body.get("exe") or "").strip() or None
-            ok, info = blender_mcp.launch_blender(exe_path)
-            if not ok:
-                return self._send_json(400, {"ok": False, "error": info})
-            bridge.log(f"Launched Blender: {info}", "cy")
-            return self._send_json(200, {"ok": True, "exe": info})
-
-        if path == "/api/blender/preview":
-            if blender_mcp is None:
-                return self._send_json(500, {"ok": False, "error": "blender_mcp module unavailable"})
-            res = blender_mcp.call_blender(
-                "capture_viewport",
-                {"max_size": int(body.get("max_size") or 768), "shading": body.get("shading") or "MATERIAL"},
-                timeout=30.0,
-            )
-            if not res.get("ok"):
-                return self._send_json(400, {"ok": False, "error": res.get("error") or "Viewport capture failed"})
-            return self._send_json(200, res)
-
         if path == "/api/quit":
             self._send_json(200, {"ok": True})
             request_shutdown()
@@ -799,14 +653,6 @@ def _run_tray(app_url):
         daemon=True,
     ).start())
     menu.addAction(act_restart)
-
-    if blender_mcp is not None:
-        act_blender = QAction("Launch Blender", menu)
-        act_blender.triggered.connect(lambda: threading.Thread(
-            target=lambda: blender_mcp.launch_blender(),
-            daemon=True,
-        ).start())
-        menu.addAction(act_blender)
 
     act_ext = QAction("Open Extension Folder", menu)
     act_ext.triggered.connect(lambda: _open_folder("extension"))

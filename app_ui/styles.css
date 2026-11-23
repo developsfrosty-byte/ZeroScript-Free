@@ -307,18 +307,6 @@ kbd {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-.nav-dot-mini {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  margin-right: 4px;
-  flex: none;
-  transition: background 0.25s ease, box-shadow 0.25s ease;
-}
-.nav-dot-mini.on { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.85); }
-.nav-dot-mini.warn { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.75); }
-
 .nav-ic {
   width: 28px;
   height: 28px;
@@ -665,28 +653,6 @@ kbd {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim), inset 0 -1px 0 var(--glass-rim-bottom);
 }
-
-.diag-targets-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 132px;
-}
-.diag-target-chip {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(10px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-.diag-target-chip .diag-title { margin-top: 0; font-size: 12px; text-align: left; }
-.diag-target-chip .diag-sub { font-size: 10.5px; text-align: left; }
-.dot-sm.warn { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.8); }
-.dot-sm.off { background: var(--text-dim); box-shadow: none; }
 
 .hero-left {
   padding: 26px 28px;
@@ -1327,55 +1293,274 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent-border); 
   animation: modalIn 0.22s var(--ease-spring) both;
 }
 
-/* ── Blender 3D Hub ───────────────────────────────────────────────────── */
-.blender-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.blender-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.bl-installs-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.bl-install-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 10px 12px; border-radius: 11px;
-  border: 1px solid var(--border); background: rgba(7, 9, 15, 0.55);
-}
-.bl-install-ver { font-family: var(--display); font-weight: 700; font-size: 13px; }
-.bl-install-path { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); word-break: break-all; margin-top: 2px; }
-.bl-stats-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-  margin-top: 10px; margin-bottom: 12px;
-}
-.bl-stat {
-  padding: 9px 11px; border-radius: 11px;
-  border: 1px solid var(--border); background: rgba(7, 9, 15, 0.5);
-  min-width: 0;
-}
-.bl-stat-val {
-  margin-top: 4px; font-family: var(--display); font-weight: 700; font-size: 14px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.bl-shading-select { width: auto !important; padding: 6px 10px !important; font-size: 11.5px !important; border-radius: 9px !important; }
-.bl-preview-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 14px;
-  border: 1px solid var(--border-strong);
-  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.04), rgba(5, 7, 12, 0.85));
+/* ── Reference-Matched Apple Liquid Glass Mode ────────────────────────── */
+.liquid-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
   overflow: hidden;
-  display: grid;
-  place-items: center;
+  display: none;
 }
-.bl-preview-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.bl-preview-frame img[hidden], .bl-preview-empty[hidden] { display: none !important; }
-.bl-preview-empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 12.5px; line-height: 1.5; }
-.bl-preview-ic { font-size: 28px; color: var(--accent); margin-bottom: 6px; }
-.bl-prompts-list { display: flex; flex-direction: column; gap: 9px; margin-top: 10px; }
+html[data-liquid="on"] .liquid-backdrop {
+  display: block;
+}
+html[data-liquid="on"] .bg-aurora {
+  opacity: 0.42;
+}
+
+.lb-sky, .lb-sun, .lb-cloud, .lb-horizon, .lb-water {
+  position: absolute;
+  inset: 0;
+}
+
+/* Sunset Skyline (Toronto golden-hour reference palette) */
+html[data-backdrop="sunset"] .lb-sky {
+  background:
+    radial-gradient(ellipse 90% 55% at 72% 48%, rgba(255, 208, 145, 0.68), transparent 62%),
+    radial-gradient(ellipse 75% 45% at 24% 38%, rgba(240, 184, 128, 0.42), transparent 60%),
+    linear-gradient(180deg, #33435b 0%, #525e73 28%, #9b7f6e 56%, #d9a774 74%, #3c3a3a 82%, #1d2229 100%);
+}
+html[data-backdrop="sunset"] .lb-sun {
+  inset: auto;
+  width: 520px; height: 520px;
+  top: 12%; right: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 226, 175, 0.62) 0%, rgba(246, 172, 102, 0.24) 45%, transparent 72%);
+  filter: blur(28px);
+}
+.lb-cloud {
+  inset: auto;
+  border-radius: 50%;
+  filter: blur(42px);
+  will-change: transform;
+}
+html[data-backdrop="sunset"] .lb-cloud-1 {
+  width: 680px; height: 260px;
+  top: 10%; left: 6%;
+  background: radial-gradient(circle at 45% 40%, rgba(255, 240, 224, 0.72), rgba(214, 178, 152, 0.28) 65%, transparent 80%);
+  animation: orbFloat1 26s ease-in-out infinite alternate;
+}
+html[data-backdrop="sunset"] .lb-cloud-2 {
+  width: 760px; height: 280px;
+  top: 22%; right: 4%;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 223, 184, 0.65), rgba(162, 138, 128, 0.25) 68%, transparent 82%);
+  animation: orbFloat2 30s ease-in-out infinite alternate;
+}
+html[data-backdrop="sunset"] .lb-cloud-3 {
+  width: 540px; height: 210px;
+  top: 44%; left: 32%;
+  background: radial-gradient(circle, rgba(252, 198, 132, 0.45), transparent 72%);
+  animation: orbFloat3 22s ease-in-out infinite alternate;
+}
+html[data-backdrop="sunset"] .lb-horizon {
+  inset: auto 0 22% 0;
+  height: 11%;
+  background: linear-gradient(180deg, transparent 0%, rgba(30, 34, 42, 0.78) 60%, rgba(20, 24, 30, 0.94) 100%);
+  clip-path: polygon(0 64%, 7% 64%, 7% 42%, 11% 42%, 11% 62%, 17% 62%, 17% 28%, 21% 28%, 21% 58%, 29% 58%, 29% 12%, 31% 4%, 33% 12%, 33% 56%, 41% 56%, 41% 34%, 46% 34%, 46% 52%, 53% 52%, 53% 24%, 58% 24%, 58% 58%, 67% 58%, 67% 32%, 73% 32%, 73% 56%, 82% 56%, 82% 38%, 89% 38%, 89% 60%, 100% 60%, 100% 100%, 0 100%);
+}
+html[data-backdrop="sunset"] .lb-water {
+  inset: auto 0 0 0;
+  height: 22%;
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 210, 158, 0.14) 0px, rgba(255, 210, 158, 0.14) 2px, rgba(16, 20, 26, 0.35) 3px, rgba(16, 20, 26, 0.35) 7px),
+    linear-gradient(180deg, #4b4744 0%, #26292f 55%, #171a1f 100%);
+}
+
+/* Aurora Sky backdrop */
+html[data-backdrop="aurora"] .lb-sky {
+  background:
+    radial-gradient(ellipse 80% 50% at 30% 25%, rgba(52, 211, 153, 0.42), transparent 65%),
+    radial-gradient(ellipse 75% 50% at 75% 32%, rgba(129, 140, 248, 0.46), transparent 65%),
+    linear-gradient(180deg, #0b1120 0%, #111c33 55%, #090d16 100%);
+}
+html[data-backdrop="aurora"] .lb-cloud-1 {
+  width: 720px; height: 280px; top: 8%; left: 12%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.36), transparent 70%);
+  animation: orbFloat1 22s ease-in-out infinite alternate;
+}
+html[data-backdrop="aurora"] .lb-cloud-2 {
+  width: 640px; height: 260px; top: 26%; right: 6%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.34), transparent 70%);
+  animation: orbFloat2 26s ease-in-out infinite alternate;
+}
+
+/* Deep Ocean backdrop */
+html[data-backdrop="ocean"] .lb-sky {
+  background:
+    radial-gradient(ellipse 75% 55% at 68% 36%, rgba(125, 211, 252, 0.56), transparent 62%),
+    linear-gradient(180deg, #164e63 0%, #0e7490 42%, #155e75 72%, #082f49 100%);
+}
+html[data-backdrop="ocean"] .lb-cloud-1 {
+  width: 680px; height: 260px; top: 14%; left: 10%;
+  background: radial-gradient(circle, rgba(224, 242, 254, 0.48), transparent 72%);
+  animation: orbFloat1 24s ease-in-out infinite alternate;
+}
+html[data-backdrop="ocean"] .lb-water {
+  inset: auto 0 0 0; height: 24%;
+  background: linear-gradient(180deg, rgba(14, 116, 144, 0.55), rgba(8, 47, 73, 0.92));
+}
+
+/* Midnight Neon backdrop */
+html[data-backdrop="midnight"] .lb-sky {
+  background:
+    radial-gradient(ellipse 75% 55% at 24% 20%, rgba(99, 102, 241, 0.38), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 80% 72%, rgba(236, 72, 153, 0.30), transparent 62%),
+    linear-gradient(180deg, #070812 0%, #101326 60%, #080912 100%);
+}
+
+html[data-motion="off"] .lb-cloud {
+  animation: none !important;
+}
+
+/* Blown Liquid Glass Surface Overrides */
+html[data-liquid="on"] {
+  --surface: rgba(255, 255, 255, 0.14);
+  --surface-2: rgba(255, 255, 255, 0.18);
+  --surface-hover: rgba(255, 255, 255, 0.24);
+  --border: rgba(255, 255, 255, 0.30);
+  --border-strong: rgba(255, 255, 255, 0.46);
+  --glass-rim: rgba(255, 255, 255, 0.64);
+  --glass-rim-bottom: rgba(255, 255, 255, 0.22);
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.84);
+  --text-dim: rgba(255, 255, 255, 0.66);
+}
+
+html[data-liquid="on"][data-glass="frosted"] {
+  --surface: rgba(24, 30, 44, 0.42);
+  --surface-hover: rgba(34, 42, 60, 0.52);
+  --glass-rim: rgba(255, 255, 255, 0.36);
+}
+html[data-liquid="on"][data-glass="crystal"] {
+  --surface: rgba(255, 255, 255, 0.09);
+  --surface-hover: rgba(255, 255, 255, 0.17);
+  --glass-rim: rgba(255, 255, 255, 0.74);
+}
+
+html[data-liquid="on"] .sidebar {
+  background: linear-gradient(175deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.08) 55%, rgba(255, 255, 255, 0.13) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.30);
+  box-shadow: 6px 0 32px rgba(0, 0, 0, 0.22), inset -1px 0 1px rgba(255, 255, 255, 0.35);
+}
+
+html[data-liquid="on"] .hero-card,
+html[data-liquid="on"] .modal-card,
+html[data-liquid="on"] .palette-card {
+  border-radius: 26px;
+}
+
+html[data-liquid="on"] .provider-card,
+html[data-liquid="on"] .guide-card,
+html[data-liquid="on"] .skill-card,
+html[data-liquid="on"] .server-card,
+html[data-liquid="on"] .settings-card,
+html[data-liquid="on"] .add-server-card,
+html[data-liquid="on"] .surface-card,
+html[data-liquid="on"] .prompt-card,
+html[data-liquid="on"] .presets-panel,
+html[data-liquid="on"] .kpi-grid,
+html[data-liquid="on"] .quick-card,
+html[data-liquid="on"] .act-card {
+  border-radius: 22px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, var(--surface) 48%, rgba(255, 255, 255, 0.12) 100%);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(22px) saturate(190%) brightness(1.04);
+  -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.04);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.28),
+    inset 0 1.5px 1px var(--glass-rim),
+    inset 0 -1.5px 2px var(--glass-rim-bottom),
+    inset 1.5px 0 2px rgba(255, 255, 255, 0.22);
+}
+
+html[data-liquid="on"] .hero-card {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 52%, rgba(255, 255, 255, 0.16) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.34),
+    inset 0 2px 1px rgba(255, 255, 255, 0.68),
+    inset 0 -2px 2px rgba(255, 255, 255, 0.24),
+    inset 1.5px 0 2px rgba(255, 255, 255, 0.26);
+}
+
+html[data-liquid="on"] .page-greeting,
+html[data-liquid="on"] .hero-headline,
+html[data-liquid="on"] .kpi-val,
+html[data-liquid="on"] .sec-title,
+html[data-liquid="on"] .skill-title,
+html[data-liquid="on"] .prov-name,
+html[data-liquid="on"] .brand-name {
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+html[data-liquid="on"] .eyebrow {
+  color: #ffffff;
+  opacity: 0.9;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+html[data-liquid="on"] .nav-item.active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.10));
+  border-color: rgba(255, 255, 255, 0.46);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 1.5px 1px rgba(255, 255, 255, 0.56);
+}
+
+html[data-liquid="on"] .palette-trigger,
+html[data-liquid="on"] .profile-card,
+html[data-liquid="on"] .social-btn,
+html[data-liquid="on"] .hdr-btn,
+html[data-liquid="on"] .btn-outline,
+html[data-liquid="on"] .filter-pill,
+html[data-liquid="on"] .swatch,
+html[data-liquid="on"] .preset-btn,
+html[data-liquid="on"] .toggle-row,
+html[data-liquid="on"] .tool-row {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(16px) saturate(170%);
+}
+
+html[data-liquid="on"] .btn-outline:hover,
+html[data-liquid="on"] .hdr-btn:hover,
+html[data-liquid="on"] .social-btn:hover,
+html[data-liquid="on"] .swatch:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.46);
+}
+
+html[data-liquid="on"] .swatch.active,
+html[data-liquid="on"] .filter-pill.active {
+  background: rgba(255, 255, 255, 0.90);
+  color: #111827;
+  border-color: #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+html[data-liquid="on"] input[type="text"],
+html[data-liquid="on"] input[type="search"],
+html[data-liquid="on"] select,
+html[data-liquid="on"] textarea,
+html[data-liquid="on"] .prompt-body,
+html[data-liquid="on"] .diag-row,
+html[data-liquid="on"] .act-pre {
+  background: rgba(12, 16, 26, 0.42);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+html[data-liquid="on"] .modal-card,
+html[data-liquid="on"] .palette-card,
+html[data-liquid="on"] .drawer-card {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(28, 34, 48, 0.56) 100%);
+  border-color: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(30px) saturate(195%);
+}
 
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 204px 1fr; }
-  .hero-card, .conn-layout, .settings-grid, .act-detail, .blender-layout { grid-template-columns: 1fr; }
+  .hero-card, .conn-layout, .settings-grid, .act-detail { grid-template-columns: 1fr; }
   .hero-left { border-right: none; border-bottom: 1px solid var(--border); }
-  .kpi-grid, .quick-grid, .bl-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid, .quick-grid { grid-template-columns: repeat(2, 1fr); }
 }
