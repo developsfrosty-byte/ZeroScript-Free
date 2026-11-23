@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-accent="indigo">
+<html lang="en" data-accent="indigo" data-glass="liquid" data-motion="on">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,7 +11,11 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="bg-aurora" aria-hidden="true"></div>
+  <div class="bg-aurora" aria-hidden="true">
+    <span class="aurora-orb orb-1"></span>
+    <span class="aurora-orb orb-2"></span>
+    <span class="aurora-orb orb-3"></span>
+  </div>
   <canvas id="bg-matrix" aria-hidden="true"></canvas>
 
   <div class="app-shell">
@@ -27,7 +31,7 @@
           </div>
           <span class="brand-name">ZeroScript</span>
         </div>
-        <span class="brand-ver" id="brand-ver">V1.7.0</span>
+        <span class="brand-ver" id="brand-ver">V1.8.0</span>
       </div>
 
       <button class="palette-trigger" id="btn-open-palette" type="button" title="Open Command Palette (Ctrl+K)">
@@ -47,6 +51,18 @@
             <span class="nav-title">Home</span>
             <span class="nav-sub">OVERVIEW, AI, GUIDES</span>
           </span>
+          <span class="nav-pill" aria-hidden="true"></span>
+        </button>
+
+        <button class="nav-item" data-view="blender">
+          <span class="nav-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12L4 7.5"/></svg>
+          </span>
+          <span class="nav-text">
+            <span class="nav-title">Blender 3D</span>
+            <span class="nav-sub">LIVE BRIDGE &amp; PREVIEW</span>
+          </span>
+          <span class="nav-dot-mini" id="nav-blender-dot" title="Blender status"></span>
           <span class="nav-pill" aria-hidden="true"></span>
         </button>
 
@@ -172,24 +188,25 @@
           </div>
           <div class="telemetry-chips">
             <span class="mini-pill" id="hero-uptime">UPTIME 0m</span>
-            <span class="mini-pill accent" id="hero-skills-pill">9 SKILLS READY</span>
+            <span class="mini-pill accent" id="hero-skills-pill">10 SKILLS READY</span>
           </div>
         </div>
 
         <!-- Subtab: Overview -->
         <div class="subpanel active" id="sub-overview">
-          <div class="hero-card">
+          <div class="hero-card glass-surface">
             <div class="hero-left">
-              <div class="eyebrow">— ZEROSCRIPT STUDIO WORKSPACE</div>
+              <div class="eyebrow">— ZEROSCRIPT STUDIO &amp; BLENDER WORKSPACE</div>
               <h2 class="hero-headline">
                 One bridge.<br />
                 <span class="hero-gradient">Twelve frontier AIs.</span>
               </h2>
               <p class="hero-desc">
-                Connect Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Arena and more directly to Roblox Studio with 9 AAA developer skills and zero terminal popups.
+                Connect Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Arena and more directly to Roblox Studio &amp; Blender 3D with 10 AAA developer skills and zero terminal popups.
               </p>
               <div class="hero-ctas">
                 <button class="btn-primary" id="cta-browse-providers">BROWSE 12 PROVIDERS →</button>
+                <button class="btn-outline" id="cta-open-blender">BLENDER 3D HUB</button>
                 <button class="btn-outline" id="cta-open-skills">SKILL PLAYBOOKS</button>
               </div>
               <div class="pinned-wrap">
@@ -214,10 +231,21 @@
                   </svg>
                 </div>
                 <div class="diagram-flow"><span></span></div>
-                <div class="diagram-node">
-                  <span class="diag-idx">02</span>
-                  <div class="diag-title">Studio MCP</div>
-                  <div class="diag-sub" id="diag-tools-sub">0 commands</div>
+                <div class="diag-targets-col">
+                  <div class="diag-target-chip">
+                    <span class="dot-sm" id="diag-studio-dot"></span>
+                    <div>
+                      <div class="diag-title">Studio MCP</div>
+                      <div class="diag-sub" id="diag-tools-sub">0 commands</div>
+                    </div>
+                  </div>
+                  <div class="diag-target-chip">
+                    <span class="dot-sm off" id="diag-blender-dot"></span>
+                    <div>
+                      <div class="diag-title">Blender 3D</div>
+                      <div class="diag-sub" id="diag-blender-sub">Not connected</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -364,6 +392,98 @@
         </div>
       </section>
 
+      <!-- ── View: Blender 3D ─────────────────────────────────────────── -->
+      <section class="view" id="view-blender">
+        <div class="blender-layout">
+          <div class="blender-col">
+            <div class="surface-card glass-surface">
+              <div class="section-head tight">
+                <div>
+                  <div class="eyebrow">— NATIVE BLENDER BRIDGE</div>
+                  <h2 class="sec-title">Blender 3D AI Setup</h2>
+                  <p class="sec-sub">Let any connected AI inspect scenes, run <code>bpy</code>/<code>bmesh</code> scripts, capture previews, and export Roblox-ready meshes.</p>
+                </div>
+                <div class="status-pill off" id="bl-status-pill">
+                  <span class="pulse-dot"></span>
+                  <span id="bl-status-txt">NOT CONNECTED</span>
+                </div>
+              </div>
+
+              <div class="bl-installs-list" id="bl-installs-list">
+                <div class="sec-sub">Scanning Blender installations...</div>
+              </div>
+
+              <div class="form-actions" style="margin-top:14px">
+                <button class="btn-primary sm" id="btn-bl-install">INSTALL &amp; ENABLE ADD-ON (1-CLICK)</button>
+                <button class="btn-outline sm" id="btn-bl-launch">LAUNCH BLENDER</button>
+                <button class="btn-outline sm" id="btn-bl-toggle">ENABLE MCP</button>
+                <button class="btn-outline sm" id="btn-bl-test">TEST CONNECTION</button>
+                <button class="btn-outline sm" data-folder="blender_addon">ADD-ON FOLDER</button>
+              </div>
+              <div class="form-msg" id="bl-action-msg" style="margin-top:10px"></div>
+            </div>
+
+            <div class="surface-card glass-surface">
+              <div class="section-head tight">
+                <div>
+                  <h2 class="sec-title">Blender → Roblox Quick Prompts</h2>
+                  <p class="sec-sub">1-click prompts that auto-load your Blender 3D playbook and export clean assets.</p>
+                </div>
+              </div>
+              <div class="bl-prompts-list" id="bl-quick-prompts"></div>
+            </div>
+          </div>
+
+          <div class="blender-col">
+            <div class="surface-card glass-surface">
+              <div class="section-head tight">
+                <div>
+                  <div class="eyebrow">— LIVE TELEMETRY</div>
+                  <h2 class="sec-title">Scene &amp; Viewport Preview</h2>
+                  <p class="sec-sub">Inspect the active Blender scene and capture a live viewport snapshot.</p>
+                </div>
+                <div class="toolbar-actions">
+                  <select id="bl-shading" class="bl-shading-select" aria-label="Viewport Shading">
+                    <option value="MATERIAL">Material</option>
+                    <option value="SOLID">Solid</option>
+                    <option value="RENDERED">Rendered</option>
+                    <option value="WIREFRAME">Wireframe</option>
+                  </select>
+                  <button class="btn-primary sm" id="btn-bl-preview">CAPTURE VIEWPORT</button>
+                </div>
+              </div>
+
+              <div class="bl-stats-grid">
+                <div class="bl-stat">
+                  <span class="kpi-label">BLENDER</span>
+                  <div class="bl-stat-val" id="bl-ver">—</div>
+                </div>
+                <div class="bl-stat">
+                  <span class="kpi-label">SCENE</span>
+                  <div class="bl-stat-val" id="bl-scene">—</div>
+                </div>
+                <div class="bl-stat">
+                  <span class="kpi-label">OBJECTS</span>
+                  <div class="bl-stat-val" id="bl-objs">0</div>
+                </div>
+                <div class="bl-stat">
+                  <span class="kpi-label">ACTIVE</span>
+                  <div class="bl-stat-val" id="bl-active">—</div>
+                </div>
+              </div>
+
+              <div class="bl-preview-frame" id="bl-preview-frame">
+                <img id="bl-preview-img" alt="Blender Viewport Preview" hidden />
+                <div class="bl-preview-empty" id="bl-preview-empty">
+                  <div class="bl-preview-ic">⬡</div>
+                  <div>Open Blender with the ZeroScript add-on enabled, then click <b>Capture Viewport</b>.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ── View: Activity ───────────────────────────────────────────── -->
       <section class="view" id="view-activity">
         <div class="kpi-grid">
@@ -390,13 +510,21 @@
         </div>
 
         <div class="toolbar-row" style="margin-top:16px">
-          <div class="filter-pills" id="activity-filters">
-            <button class="filter-pill active" data-af="all">All</button>
-            <button class="filter-pill" data-af="ok">Succeeded</button>
-            <button class="filter-pill" data-af="err">Errors</button>
+          <div class="toolbar-actions">
+            <div class="filter-pills" id="activity-filters">
+              <button class="filter-pill active" data-af="all">All</button>
+              <button class="filter-pill" data-af="ok">Succeeded</button>
+              <button class="filter-pill" data-af="err">Errors</button>
+            </div>
+            <div class="filter-pills" id="activity-server-filters">
+              <button class="filter-pill active" data-asrv="all">All Apps</button>
+              <button class="filter-pill" data-asrv="roblox">Roblox</button>
+              <button class="filter-pill" data-asrv="blender">Blender</button>
+            </div>
           </div>
           <div class="toolbar-actions">
             <input type="search" id="activity-search" class="search-input" placeholder="Filter tool calls..." />
+            <button class="btn-outline sm" id="btn-export-activity">EXPORT JSON</button>
             <button class="btn-outline sm" id="btn-clear-activity">CLEAR TIMELINE</button>
           </div>
         </div>
@@ -421,6 +549,7 @@
             <button class="filter-pill active" data-cat="All">All</button>
             <button class="filter-pill" data-cat="UI">UI</button>
             <button class="filter-pill" data-cat="Building">Building</button>
+            <button class="filter-pill" data-cat="Blender">Blender</button>
             <button class="filter-pill" data-cat="Cutscenes">Cutscenes</button>
             <button class="filter-pill" data-cat="Combat &amp; VFX">Combat &amp; VFX</button>
             <button class="filter-pill" data-cat="Scripting">Scripting</button>
@@ -581,6 +710,16 @@
                   <button type="button" class="swatch" data-accent-pick="emerald"><span class="sw-dot" style="background:#34d399"></span>Emerald</button>
                   <button type="button" class="swatch" data-accent-pick="amber"><span class="sw-dot" style="background:#fbbf24"></span>Amber</button>
                   <button type="button" class="swatch" data-accent-pick="crimson"><span class="sw-dot" style="background:#f43f5e"></span>Crimson</button>
+                  <button type="button" class="swatch" data-accent-pick="prism"><span class="sw-dot" style="background:linear-gradient(135deg,#38bdf8,#c084fc,#f472b6)"></span>Prism</button>
+                </div>
+              </div>
+
+              <div>
+                <div class="field-caption">Glass Surface Style</div>
+                <div class="accent-swatches" id="glass-style-pills">
+                  <button type="button" class="swatch active" data-glass-pick="liquid">Liquid Glass</button>
+                  <button type="button" class="swatch" data-glass-pick="frosted">Frosted Dark</button>
+                  <button type="button" class="swatch" data-glass-pick="crystal">Crystal Clear</button>
                 </div>
               </div>
 
@@ -691,6 +830,7 @@
             <select id="sk-cat">
               <option value="UI">UI</option>
               <option value="Building">Building</option>
+              <option value="Blender">Blender</option>
               <option value="Cutscenes">Cutscenes</option>
               <option value="Combat &amp; VFX">Combat &amp; VFX</option>
               <option value="Scripting">Scripting</option>

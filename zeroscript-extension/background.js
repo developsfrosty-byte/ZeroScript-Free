@@ -75,6 +75,7 @@ let studioApp = null;
 // Assistant Settings > MCP Servers inside Studio (validated live 3x), which
 // "open Roblox Studio" wording completely fails to convey.
 let studioProc = null;
+let blenderStatus = null;
 
 function log(...a) {
   console.log("[zs-bg]", ...a);
@@ -120,6 +121,7 @@ function connect() {
     studioConnected = null;
     studioApp = null;
     studioProc = null;
+    blenderStatus = null;
     serversCache = [];
     skillsCache = [];
     stopHeartbeat();
@@ -242,6 +244,9 @@ function handleBridgeMessage(msg) {
   if ("studio_proc" in msg && (typeof msg.studio_proc === "boolean" || msg.studio_proc === null)) {
     studioProc = msg.studio_proc;
   }
+  if ("blender" in msg && msg.blender && typeof msg.blender === "object") {
+    blenderStatus = msg.blender;
+  }
   if (msg.type === "studio_status") {
     resolvePending(msg.id, { ok: true, studio: studioConnected });
     broadcastStatus();
@@ -323,7 +328,7 @@ function failAllPending(reason) {
 
 // ── status push to any open DeepSeek tab + popup ─────────────────────────
 function statusObj() {
-  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, tools: toolsCache.length, servers: serversCache, skills: skillsCache, globalPrompt: globalPromptCache };
+  return { type: "zs-status", connected, mcpAlive, studio: studioConnected, studioApp, studioProc, blender: blenderStatus, tools: toolsCache.length, servers: serversCache, skills: skillsCache, globalPrompt: globalPromptCache };
 }
 
 function broadcastStatus() {

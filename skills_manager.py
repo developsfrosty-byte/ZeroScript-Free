@@ -18,11 +18,13 @@ BUILTIN_ORDER = {
     "lighting-atmosphere-audio": 6,
     "economy-progression-loops": 7,
     "performance-optimization": 8,
+    "blender-3d-roblox-pipeline": 9,
 }
 
 VALID_CATEGORIES = (
     "UI",
     "Building",
+    "Blender",
     "Cutscenes",
     "Combat & VFX",
     "Scripting",
@@ -32,14 +34,26 @@ VALID_CATEGORIES = (
     "Custom",
 )
 VALID_MODES = ("auto", "always")
-VALID_ACCENTS = ("indigo", "cyan", "emerald", "amber", "crimson")
+VALID_ACCENTS = ("indigo", "cyan", "emerald", "amber", "crimson", "prism")
+VALID_GLASS_STYLES = ("liquid", "frosted", "crystal")
 
 SKILL_PRESETS = [
     {
         "id": "all-rounder",
         "name": "Full AAA Stack",
-        "desc": "Enable all 9 specialized playbooks across UI, architecture, combat, AI, lighting, economy, and performance.",
+        "desc": "Enable all 10 specialized playbooks across UI, architecture, Blender 3D, combat, AI, lighting, economy, and performance.",
         "skills": list(BUILTIN_ORDER.keys()),
+    },
+    {
+        "id": "blender-3d",
+        "name": "Blender 3D & Assets",
+        "desc": "Best for modeling props, weapons, stylized environments in Blender and exporting <10k-tri meshes to Roblox Studio.",
+        "skills": [
+            "blender-3d-roblox-pipeline",
+            "building-architecture",
+            "lighting-atmosphere-audio",
+            "performance-optimization",
+        ],
     },
     {
         "id": "action-combat",
@@ -124,6 +138,18 @@ BUILTIN_STARTER_PROMPTS = [
         "title": "Boss Reveal Spline Cutscene + Skip HUD",
         "category": "Cutscenes",
         "text": "Read cutscenes-cinematics skill first. Build a CutsceneDirector ModuleScript in ReplicatedStorage with Catmull-Rom spline camera motion, DepthOfField focus pulls, 2.35:1 letterbox bars, subtitle beats, Skip button, and zero-softlock cleanup().",
+    },
+    {
+        "id": "blender-stylized-sword",
+        "title": "Blender Stylized Fantasy Sword (Roblox Export)",
+        "category": "Blender",
+        "text": "Call list_mcp_servers then list_commands with server='blender', and read the blender-3d-roblox-pipeline skill. Model a stylized fantasy greatsword in Blender with a beveled fuller blade, leather-wrapped grip, glowing crystal pommel, metallic/roughness PBR materials, capture a viewport preview to verify silhouette, and export a <5k tri Roblox-ready FBX.",
+    },
+    {
+        "id": "blender-sci-fi-crate",
+        "title": "Blender Sci-Fi Supply Crate + Emissive Trim",
+        "category": "Blender",
+        "text": "Call list_mcp_servers then list_commands with server='blender', and read blender-3d-roblox-pipeline. Build a sci-fi supply crate in Blender using bmesh insets, corner latches, bevel modifiers, dark titanium + cyan emissive materials, Smart UV unwrap, inspect with blender_capture_viewport, and export to GLB.",
     },
 ]
 
@@ -439,6 +465,7 @@ def default_settings():
         "autoOpenWindow": True,
         "appPort": int(os.environ.get("ZS_APP_PORT", "17614")),
         "accentTheme": "indigo",
+        "glassStyle": "liquid",
         "ambientMotion": True,
         "favoriteProviders": ["claude", "deepseek", "gemini"],
         "globalPrompt": "",
@@ -484,6 +511,8 @@ def load_settings():
                     cfg["appPort"] = saved["appPort"]
                 if isinstance(saved.get("accentTheme"), str) and saved["accentTheme"].strip().lower() in VALID_ACCENTS:
                     cfg["accentTheme"] = saved["accentTheme"].strip().lower()
+                if isinstance(saved.get("glassStyle"), str) and saved["glassStyle"].strip().lower() in VALID_GLASS_STYLES:
+                    cfg["glassStyle"] = saved["glassStyle"].strip().lower()
                 if isinstance(saved.get("ambientMotion"), bool):
                     cfg["ambientMotion"] = saved["ambientMotion"]
                 if isinstance(saved.get("favoriteProviders"), list):
@@ -521,6 +550,10 @@ def save_settings(patch):
             th = patch["accentTheme"].strip().lower()
             if th in VALID_ACCENTS:
                 cfg["accentTheme"] = th
+        if "glassStyle" in patch and isinstance(patch["glassStyle"], str):
+            gs = patch["glassStyle"].strip().lower()
+            if gs in VALID_GLASS_STYLES:
+                cfg["glassStyle"] = gs
         if "ambientMotion" in patch:
             cfg["ambientMotion"] = _parse_bool(patch["ambientMotion"], default=cfg["ambientMotion"])
         if "favoriteProviders" in patch and isinstance(patch["favoriteProviders"], list):

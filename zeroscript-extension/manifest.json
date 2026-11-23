@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ZeroScript Free × Roblox Studio Agent",
-  "version": "1.7.0",
-  "description": "Turn Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio agent driven by local MCP + Pro Skills.",
+  "name": "ZeroScript Free × Roblox Studio & Blender Agent",
+  "version": "1.8.0",
+  "description": "Turn Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio & Blender 3D agent driven by local MCP + Pro Skills.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://chat.deepseek.com/*",
