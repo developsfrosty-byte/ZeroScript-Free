@@ -2,6 +2,22 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.8.0] - 2026-11-23
+
+### Added
+- **Native Built-in Blender 3D AI Integration (`blender_addon/zeroscript_blender_addon.py` + `blender_mcp.py` + `bridge.py` + `app.py`):**
+  - Zero-dependency Blender 3.6 / 4.x / 5.x (including 5.2 LTS) add-on with main-thread safe TCP JSON bridge (`127.0.0.1:9876`) and View3D N-panel (`ZeroScript`) controls.
+  - Built-in stdio MCP server (`blender_mcp.py`) exposing 11 `blender_*` tools: `blender_get_scene_info`, `blender_get_object_info`, `blender_execute_python`, `blender_create_primitive`, `blender_transform_object`, `blender_set_material`, `blender_add_modifier`, `blender_capture_viewport`, `blender_render_scene`, `blender_export_asset`, and `blender_import_asset`.
+  - Added raw `###BLENDER### ... ###END_BLENDER###` (and `###PY###`) code blocks in `zeroscript-extension/core/parser.js` + `core/config.js` so models never need to JSON-escape Python code, plus live Blender status and vision handling in `background.js`, `core/main.js`, and `popup.js`.
+- **10th AAA Agent Skill Playbook (`skills/blender-3d-roblox-pipeline.md`) & Presets (`skills_manager.py`):**
+  - Added **Blender 3D Modeling & Roblox Pipeline** playbook, the **Blender 3D & Assets** preset pack, and 2 Blender starter prompts.
+- **Liquid Glass UI & Upgraded App Motion (`app_ui/`):**
+  - Added selectable Glass Surface Styles (`Liquid Glass`, `Frosted Dark`, `Crystal Clear`), a 6th iridescent **Prism** accent theme, living aurora orb backdrop, interactive cursor specular sheen, spring cubic-bezier transitions, staggered entrance choreography, animated KPI counters, and a `requestAnimationFrame` ambient dot canvas.
+- **New Desktop App Features (`app_ui/` + `app.py`):**
+  - **Blender 3D Hub (`#view-blender`):** 1-click **Install & Enable Add-on**, **Launch Blender**, **Enable/Disable MCP**, **Test Connection**, live scene telemetry, live **Capture Viewport** preview frame, and Blender Health Doctor + tray actions.
+  - **Upgraded 3-Way Home Pipeline Diagram:** Live dual-target view (`AI Chat` → `ZeroScript Hub` → `Studio MCP` + `Blender 3D`).
+  - **Activity Inspector & Command Palette Upgrades:** Server filters (`All Apps` / `Roblox` / `Blender`), JSON export, per-call `COPY`, and full `ArrowUp` / `ArrowDown` keyboard navigation in `Ctrl+K`.
+
 ## [1.7.0] - 2026-11-22
 
 ### Added

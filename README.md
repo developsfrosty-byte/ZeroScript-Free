@@ -4,8 +4,8 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
-**ZeroScript** is a free browser extension that turns Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral Le Chat, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio AI agent.
-Control Roblox Studio with AI directly from your browser - read/edit scripts, run Luau, generate assets, all from a normal AI chat. No API key, no terminal, no coding needed.
+**ZeroScript** is a free browser extension that turns Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral Le Chat, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio & Blender 3D AI agent.
+Control Roblox Studio and Blender 3D with AI directly from your browser - read/edit scripts, run Luau or Blender Python (`bpy`/`bmesh`), generate and export 3D assets, all from a normal AI chat. No API key, no terminal, no coding needed.
 
 > 🌐 **Website: [zerodev.tools/zeroscript](https://zerodev.tools/zeroscript)** the free Lemonade.gg / Luamotion alternative for building Roblox games with AI.
 
@@ -81,8 +81,15 @@ Go to https://claude.ai, https://chat.deepseek.com, https://chatgpt.com, https:/
 - Generate meshes, materials, and models
 - Browse and insert from the Creator Store
 - Control play-testing
-- **Apply 9 specialized AAA Agent Skills** — built-in playbooks for UI & HUD Craftsmanship, 3D Building & Architecture, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture/Networking/DataStore, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
+- **Apply 10 specialized AAA Agent Skills** — built-in playbooks for UI & HUD Craftsmanship, 3D Building & Architecture, **Blender 3D Modeling & Roblox Pipeline**, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture/Networking/DataStore, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
+- **Control Blender 3D live** — model with `bpy`/`bmesh`, apply Principled BSDF materials & modifiers, capture live viewport previews, and export <10k-tri Roblox-ready `.fbx`/`.glb` assets
 - **Remember your project across sessions** persistent project memory saved inside your place
+
+## New in 1.8.0
+
+- **Native Blender 3D AI Bridge + 1-Click Add-on Installer.** Ships a built-in Blender 3.6 / 4.x / 5.x add-on (`blender_addon/zeroscript_blender_addon.py`) and zero-dependency MCP server (`blender_mcp.py`) with 11 `blender_*` tools, raw `###BLENDER### ... ###END_BLENDER###` Python code blocks, live viewport image previews, and a 1-click **Install & Enable Add-on** button in the new **Blender 3D** desktop tab.
+- **Liquid Glass UI & Spring App Motion.** Selectable **Liquid Glass**, **Frosted Dark**, and **Crystal Clear** surfaces, living aurora orbs, interactive cursor specular sheen, a 6th **Prism** accent theme, spring transitions, and smooth `requestAnimationFrame` ambient motion.
+- **New Workspace Features.** Added the **Blender 3D Hub** with live scene telemetry & viewport capture, upgraded 3-way Home pipeline (`Studio MCP` + `Blender 3D`), Activity server filters + JSON export + call copy, `Ctrl+K` Command Palette arrow-key navigation, and the 10th **Blender 3D Modeling & Roblox Pipeline** playbook.
 
 ## New in 1.7.0
 
