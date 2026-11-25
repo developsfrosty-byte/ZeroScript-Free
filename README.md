@@ -84,6 +84,10 @@ Go to https://claude.ai, https://chat.deepseek.com, https://chatgpt.com, https:/
 - **Apply 17 specialized AAA Agent Skills** — built-in playbooks for **1:1 Game Recreation**, **AAA Animations & Motor6D Procedural Motion**, **Creature Gaits, Facial Rigs & State Machines**, **Movement/Parkour & Camera Feel**, **1:1 Map Design & Biomes**, **Zero-Trust Security, DataStores & Trading**, **Pets, Quests & Lobbies**, **1:1 Reference UI, Mobile & Gamepad UX**, UI & HUD Craftsmanship, 3D Building & Architecture, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture & Networking, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
 - **Built-in 60-Gate Luau Auditor, 19 Starter Modules, 12-Genre Style Guide & Local Project Memory** — AIs can automatically route playbooks (`route_skills`), scan scripts (`audit_luau`), pull reusable security/UI/animation modules (`get_luau_module`), inspect 12 genre design tokens (`get_style_guide`), diagnose Roblox bugs (`diagnose_bug`), and persist architecture facts (`memory_read` / `memory_write`), all also available interactively in the Desktop App's **Toolkit** tab
 
+## New in 1.9.2
+
+- **Gemini Error Auto-Recovery & Cooldown (`v1.9.2`).** Automatically detects `"I encountered an error doing what you asked. Could you try again?"` on Gemini and transient server errors across providers, automatically clicks Redo/Retry (`↻`) or sends a recovery prompt instead of halting mid-build, adds an injection cooldown (`sendDelayMs`), and blocks internal Gemini sandbox/tool calls that trigger server errors.
+
 ## New in 1.9.1
 
 - **All-AI Start Button & Session Startup Fixes.** Fixed Start/Stop/menu buttons hijacking host `<form>`/`<fieldset>` submissions (`type="button"` + event isolation), fixed `startSession()` falsely reporting `Agent active` when startup sending/generation fails or returns an internal error, and added native `openNewChat()` support across all 12 AI providers.

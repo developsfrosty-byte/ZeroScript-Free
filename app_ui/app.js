@@ -244,7 +244,7 @@
 
     applyTheme(settings);
 
-    $("#brand-ver").textContent = `V${br.version || "1.9.1"}`;
+    $("#brand-ver").textContent = `V${br.version || "1.9.2"}`;
     const name = settings.userName || "Builder";
     $("#profile-name").textContent = name;
     $("#profile-avatar").textContent = name.charAt(0).toUpperCase();

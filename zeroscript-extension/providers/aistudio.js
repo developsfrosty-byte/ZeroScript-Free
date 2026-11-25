@@ -440,6 +440,21 @@ const ZSProvider = (() => {
   const findContinueBtn = () => null;
   const clickContinueBtn = () => false;
 
+  async function clickRetryBtn(item) {
+    const target = item || lastAssistant();
+    if (!target || !target.querySelectorAll) return false;
+    for (const b of target.querySelectorAll("button")) {
+      if (!isVisibleBox(b) || b.closest("#zs-root") || b.disabled) continue;
+      const aria = `${b.getAttribute("aria-label") || ""} ${b.getAttribute("mattooltip") || ""} ${b.textContent || ""}`.trim();
+      const ic = b.querySelector("mat-icon");
+      const icName = ic ? (ic.getAttribute("fonticon") || ic.getAttribute("data-mat-icon-name") || ic.textContent || "").trim().toLowerCase() : "";
+      if (/\b(?:rerun|regenerate|retry|try again)\b/i.test(aria) || icName === "refresh" || icName === "replay") {
+        try { b.click(); diag("aistudio.retryClicked", {}); return true; } catch { return false; }
+      }
+    }
+    return false;
+  }
+
   function snapshot() {
     try {
       const it = lastAssistant();
@@ -851,7 +866,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-25_v1.9.1"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-25_v1.9.2"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
@@ -862,12 +877,14 @@ const ZSProvider = (() => {
     enforceComposer, ensureComposerReady, modeWarning,
     modeSwitchLabel: "↗ Open Chat", switchToSupportedMode,
     activeInterferingTools, disableInterferingTools, bootErrorHint,
-    turnHalted, findContinueBtn, clickContinueBtn,
+    turnHalted, findContinueBtn, clickContinueBtn, clickRetryBtn,
     scanError, isTooLongMsg, isBusyMsg,
     attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
     promptExtra: PROMPT_EXTRA,
     resendSystemEvery: 5,
+    resendSystemEveryResults: 14,
+    sendDelayMs: 600,
     sendCharBudget: SEND_MAX_CHARS - 4000,
   };
 })();

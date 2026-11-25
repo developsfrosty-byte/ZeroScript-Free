@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZeroScript Free × Roblox Studio Agent",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Turn Claude, ChatGPT, DeepSeek, Gemini, Google AI Studio, Grok, Mistral, Kimi, GLM, Qwen, Arena or Meta AI into a Roblox Studio agent with 17 AAA Pro Skills, 60-Gate Luau Auditor, 19 Starter Modules, 12-Genre Style Guide & Project Memory.",
   "permissions": ["storage"],
   "host_permissions": [

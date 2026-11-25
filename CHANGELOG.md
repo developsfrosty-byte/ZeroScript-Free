@@ -2,6 +2,14 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.9.2] - 2026-11-25
+
+### Fixed
+- **Gemini `"I encountered an error doing what you asked. Could you try again?"` Auto-Recovery & Prevention (`providers/gemini.js`, `providers/aistudio.js`, `core/main.js`):**
+  - Expanded Gemini's `RE.busy` pattern to recognize `"I encountered an error doing what you asked. Could you try again?"` and related Gemini server-hiccup phrases.
+  - Added automatic transient-error recovery in `agentLoop()` (up to 2 automatic retries) and `startSession()` (1 startup retry) using native Redo/Retry/Rerun buttons (`clickRetryBtn()`) on Gemini & Google AI Studio with a safe recovery-prompt fallback.
+  - Added `P.sendDelayMs` injection cooldown (`900ms` on Gemini, `600ms` on Google AI Studio), relaxed Gemini's system-prompt re-injection cadence (`resendSystemEvery: 8`, `resendSystemEveryResults: 14`), and explicitly instructed Gemini never to invoke its internal sandbox/code-execution/Canvas tools.
+
 ## [1.9.1] - 2026-11-25
 
 ### Fixed

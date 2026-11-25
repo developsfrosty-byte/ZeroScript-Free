@@ -62,7 +62,7 @@ const ZSProvider = (() => {
       "i"
     ),
     tooLong: /conversation .{0,20}(too long|getting too long|trop longue)/i,
-    busy: /something went wrong|une erreur s.est produite|try again later|réessayer plus tard|temporarily unavailable/i,
+    busy: /encountered an error|could you try again|something went wrong|an error occurred|error generating|une erreur s.est produite|j.ai rencontr[ée] une erreur|try again later|r[ée]essayer plus tard|temporarily unavailable|unable to process/i,
   };
 
   // Gemini streams continuously with a hard stop-icon signal for the WHOLE
@@ -409,6 +409,50 @@ const ZSProvider = (() => {
   const findContinueBtn = () => null;
   const clickContinueBtn = () => false;
 
+  const RETRY_ICONS = new Set(["refresh", "redo", "replay", "autorenew"]);
+  const RETRY_RE = /\b(?:redo|try again|regenerate|retry|r[ée]essayer|r[ée]g[ée]n[ée]rer)\b/i;
+
+  function findRetryButton(item) {
+    const target = item || lastAssistant();
+    if (!target) return null;
+    const scopes = [target, target.closest && target.closest(".conversation-container")].filter(Boolean);
+    for (const sc of scopes) {
+      if (!sc.querySelectorAll) continue;
+      for (const b of sc.querySelectorAll("button")) {
+        if (!isVisibleBox(b) || b.closest("#zs-root") || isBtnDisabled(b)) continue;
+        const ic = iconName(b);
+        const sig = `${b.getAttribute("aria-label") || ""} ${b.getAttribute("mattooltip") || ""} ${b.textContent || ""}`.trim();
+        if (RETRY_ICONS.has(ic) || RETRY_RE.test(sig)) return b;
+      }
+    }
+    return null;
+  }
+
+  async function clickRetryBtn(item) {
+    const b = findRetryButton(item);
+    if (!b) return false;
+    try { b.click(); } catch { return false; }
+    await sleep(160);
+    // Some Gemini builds open a Redo submenu ("Try again", "Shorter", ...)
+    for (const mi of document.querySelectorAll('.cdk-overlay-container [role="menuitem"], .cdk-overlay-container button')) {
+      if (!isVisibleBox(mi) || mi.closest("#zs-root")) continue;
+      const txt = `${mi.getAttribute("aria-label") || ""} ${mi.textContent || ""}`.trim();
+      if (/try again|redo|r[ée]essayer/i.test(txt)) {
+        try { mi.click(); } catch {}
+        break;
+      }
+    }
+    diag("gemini.retryClicked", {});
+    return true;
+  }
+
+  function bootErrorHint(text) {
+    if (/encountered an error|try again|something went wrong|unavailable/i.test(text || "")) {
+      return "Gemini's server hiccuped mid-request. ZeroScript can auto-retry, or click the Redo (↻) icon under Gemini's reply / switch model (e.g. Flash vs Pro).";
+    }
+    return "";
+  }
+
   function snapshot() {
     try {
       const it = lastAssistant();
@@ -729,7 +773,8 @@ const ZSProvider = (() => {
   // ── Gemini-only system-prompt rules ───────────────────────────────────────
   // Gemini tends to drift back into plain-text coding mode in longer sessions,
   // outputting a Lua module and telling the user to paste it into Studio.
-  const PROMPT_EXTRA = `- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: this browser extension is live in this page for the entire session. Never write notes like "ZeroScript's command bridge isn't active in this session" or "paste the module above into Roblox Studio" — always emit a fenced ZeroScript command block (multi_edit for scripts, or a fenced ###LUA### ... ###END_LUA### block for execute_luau) so the extension executes it directly inside Roblox Studio.`;
+  const PROMPT_EXTRA = `- NEVER CLAIM ZEROSCRIPT IS INACTIVE OR TELL THE USER TO PASTE CODE: this browser extension is live in this page for the entire session. Never write notes like "ZeroScript's command bridge isn't active in this session" or "paste the module above into Roblox Studio" — always emit a fenced ZeroScript command block (multi_edit for scripts, or a fenced ###LUA### ... ###END_LUA### block for execute_luau) so the extension executes it directly inside Roblox Studio.
+- NEVER INVOKE GEMINI'S BUILT-IN TOOLS, EXTENSIONS, CODE EXECUTION, OR CANVAS: calling Gemini's internal sandbox tools fails with "I encountered an error doing what you asked". Always output plain text + ONE fenced ZeroScript command block.`;
 
   // ── User-send interception ────────────────────────────────────────────────
   function installSendHooks(handlers) {
@@ -863,7 +908,7 @@ const ZSProvider = (() => {
       "Gemini can drift back into plain-text replies in very long sessions. ZeroScript auto-refreshes its instructions and auto-recovers if it forgets, or you can start a new session anytime.",
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-gem-ver", "2026-11-25_v1.9.1"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gem-ver", "2026-11-25_v1.9.2"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
@@ -874,13 +919,15 @@ const ZSProvider = (() => {
     setInputLock, typeAndSend, stopGeneration,
     isGenerating, isBusyNow, isHardGenerating,
     enforceComposer, ensureComposerReady,
-    turnHalted, findContinueBtn, clickContinueBtn,
+    turnHalted, findContinueBtn, clickContinueBtn, clickRetryBtn, bootErrorHint,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
     attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
     promptExtra: PROMPT_EXTRA,
-    resendSystemEvery: 4,
+    resendSystemEvery: 8,
+    resendSystemEveryResults: 14,
+    sendDelayMs: 900,
     sendCharBudget: SEND_MAX_CHARS - 4000,
   };
 })();

@@ -285,6 +285,9 @@
           P.streamLen(_settleItem) > _settleLen0) {
         await waitFor(() => !P.isGenerating(), 4000);
       }
+      if (P.sendDelayMs > 0 && !A.stop) {
+        await sleep(P.sendDelayMs);
+      }
       const base = P.assistantCount();
       const preUser = P.userCount();
       // Arm the optimistic pre-hide for the result turn we're about to inject:
@@ -765,7 +768,7 @@
       // truncates. We try clicking it directly (same turn) in the loop.
       if (P.findContinueBtn()) return { kind: "truncated", text: r, item: d.item };
       if (r === "") { diag("empty.why", { branch: "finalBlank" }); return { kind: "empty" }; }
-      return { kind: "text", text: r };
+      return { kind: "text", text: r, item: d.item };
     }
     return { kind: "timeout" };
   }
@@ -1323,6 +1326,8 @@
     const MAX_TRUNC = 6;
     let amnesiaNudges = 0;
     const MAX_AMNESIA_NUDGES = 1;
+    let busyRetries = 0;
+    const MAX_BUSY_RETRIES = 2;
     // Re-send the command list after this many successful tool calls. Kept high
     // so the reminder does not bloat the context too often.
     const REMIND_TOOLS_EVERY = 20;
@@ -1435,6 +1440,35 @@
         if (res.kind === "text") {
           const errText = (res.text || "").trim();
           if (errText && errText.length < 320 && P.isBusyMsg && P.isBusyMsg(errText)) {
+            if (busyRetries < MAX_BUSY_RETRIES && !A.stop) {
+              busyRetries++;
+              diag("loop.busyRetry", { provider: P.id, attempt: busyRetries, text: errText.slice(0, 120) });
+              ui.toast(`${P.displayName} hit a temporary error — retrying (${busyRetries}/${MAX_BUSY_RETRIES})…`);
+              await sleep(1500 * busyRetries);
+              if (A.stop) break;
+              let nativeTriggered = false;
+              if (P.clickRetryBtn) {
+                try {
+                  const clicked = await P.clickRetryBtn(res.item);
+                  if (clicked) {
+                    nativeTriggered = await waitFor(() => {
+                      if (P.isGenerating()) return true;
+                      const cur = (P.readAssistant().reply || "").trim();
+                      return cur !== "" && cur !== errText;
+                    }, 3500);
+                  }
+                } catch {}
+              }
+              if (nativeTriggered) {
+                base = Math.max(0, P.assistantCount() - 1);
+                A.sendToken = undefined;
+                continue;
+              }
+              base = await submitAndGetBase(
+                "The previous response failed with a temporary site error. Continue right where you left off with ONE fenced ZeroScript command block (do not use this site's built-in tools or code execution)."
+              );
+              continue;
+            }
             const hint = P.bootErrorHint ? P.bootErrorHint(errText) : "";
             diag("loop.providerError", { provider: P.id, text: errText.slice(0, 120) });
             ui.banner("warn", `${P.displayName} returned an error`,
@@ -1456,6 +1490,7 @@
 
         if (res.kind === "tool") {
           amnesiaNudges = 0;
+          busyRetries = 0;
           const calls = res.calls;
           if (calls.length > 1) {
             base = await submitAndGetBase(ZS.FEEDBACK.multiTool(calls.map((c) => c.tool || "?")));
@@ -1771,7 +1806,7 @@
   // once the window has elapsed with nothing to piggyback on.
   const RESEND_SYS_EVERY = P.resendSystemEvery || 0;
   // Injected tool results get their own, larger budget (see sysResendDue).
-  const RESEND_SYS_EVERY_RESULTS = 8;
+  const RESEND_SYS_EVERY_RESULTS = P.resendSystemEveryResults || 8;
 
   // How much conversation has accumulated since the operating instructions were
   // last stated. PERSISTED per conversation, because both simpler designs failed
@@ -2007,11 +2042,24 @@
       // (syncSessionState pins A.startingKey to the conversation id once the chat
       // has content, and aborts this bootstrap if the user opens a new empty chat.)
       decorate.sweep(); // show the animated "Starting Up" chip immediately
-      const startRes = await waitForResponse(base);
+      let startRes = await waitForResponse(base);
       if (!alive()) return;
       // The user halted the bootstrap (our Stop or the site's native stop). Do
       // NOT declare the session ready - abort quietly so "Start" stays available.
       if (A.stop || startRes.kind === "stopped") { diag("start.aborted", { kind: startRes.kind }); return; }
+      if (startRes.kind === "text" && P.isBusyMsg && P.isBusyMsg((startRes.text || "").trim()) && P.clickRetryBtn && !A.stop) {
+        diag("start.busyRetry", { provider: P.id, text: (startRes.text || "").slice(0, 120) });
+        ui.toast(`${P.displayName} hit a temporary error — retrying startup…`);
+        await sleep(2000);
+        if (!alive() || A.stop) return;
+        const retried = await P.clickRetryBtn(startRes.item);
+        if (retried) {
+          A.sendToken = undefined;
+          startRes = await waitForResponse(Math.max(0, P.assistantCount() - 1));
+          if (!alive()) return;
+          if (A.stop || startRes.kind === "stopped") { diag("start.aborted", { kind: startRes.kind }); return; }
+        }
+      }
       const startFail = bootFailureReason(startRes);
       if (startFail) {
         diag("start.failed", { provider: P.id, kind: startRes.kind, title: startFail.title });
