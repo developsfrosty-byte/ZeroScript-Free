@@ -102,18 +102,18 @@
   // AI chat sites ZeroScript works on. Keep in sync with manifest.json
   // content_scripts and background.js PROVIDER_URLS when adding a provider.
   const AI_SITES = [
-    { name: "DeepSeek", url: "https://chat.deepseek.com/" },
-    { name: "Claude", url: "https://claude.ai/new" },
-    { name: "ChatGPT", url: "https://chatgpt.com/" },
-    { name: "Gemini", url: "https://gemini.google.com/app" },
-    { name: "AI Studio", url: "https://aistudio.google.com/prompts/new_chat" },
-    { name: "Grok", url: "https://grok.com/" },
-    { name: "Mistral", url: "https://chat.mistral.ai/" },
-    { name: "Kimi", url: "https://www.kimi.ai/" },
-    { name: "GLM", url: "https://chat.z.ai/" },
-    { name: "Qwen", url: "https://chat.qwen.ai/" },
-    { name: "Arena", url: "https://arena.ai/text/direct" },
-    { name: "Meta AI", url: "https://www.meta.ai/" },
+    { id: "deepseek", name: "DeepSeek", url: "https://chat.deepseek.com/" },
+    { id: "claude", name: "Claude", url: "https://claude.ai/new" },
+    { id: "chatgpt", name: "ChatGPT", url: "https://chatgpt.com/" },
+    { id: "gemini", name: "Gemini", url: "https://gemini.google.com/app" },
+    { id: "aistudio", name: "AI Studio", url: "https://aistudio.google.com/prompts/new_chat" },
+    { id: "grok", name: "Grok", url: "https://grok.com/" },
+    { id: "mistral", name: "Mistral", url: "https://chat.mistral.ai/" },
+    { id: "kimi", name: "Kimi", url: "https://www.kimi.ai/" },
+    { id: "glm", name: "GLM", url: "https://chat.z.ai/" },
+    { id: "qwen", name: "Qwen", url: "https://chat.qwen.ai/" },
+    { id: "arena", name: "Arena", url: "https://arena.ai/text/direct" },
+    { id: "meta", name: "Meta AI", url: "https://www.meta.ai/" },
   ];
 
   const A = {
@@ -188,6 +188,8 @@
     parked: false,
     // Timestamp of the last successful tool-catalogue refresh (see ensureTools).
     toolsAt: 0,
+    // Whether the most recent submitAndGetBase call actually landed/cleared.
+    lastSendOk: false,
   };
 
   async function waitFor(pred, timeout) {
@@ -266,6 +268,7 @@
   }
 
   async function submitAndGetBase(text, images) {
+    A.lastSendOk = false;
     captureSendToken();
     diag("send", { text: String(text).slice(0, 60), busy: P.isBusyNow() });
     A.injecting = true;
@@ -327,13 +330,14 @@
         tries++;
       }
       if (messageSent) diag("send.cleared", { tries });
+      A.lastSendOk = !!(messageSent || landed());
       // All retries exhausted with NO evidence the message landed (textarea never
       // cleared, no new turn). Silently returning here left the loop waiting for
       // a reply that will never come (~60s "empty" timeout) with zero explanation
       // - the reported "the tool result just never gets injected" symptom. Tell
       // the user what actually happened so they can nudge the conversation
       // themselves instead of watching a stuck bar.
-      if (!messageSent && !landed() && !A.stop) {
+      if (!A.lastSendOk && !A.stop) {
         diag("send.failed", { tries });
         ui.banner("warn", "Message could not be sent",
           `${P.displayName} did not accept the injected message after ${tries} attempts. ` +
@@ -1429,6 +1433,14 @@
           continue;
         }
         if (res.kind === "text") {
+          const errText = (res.text || "").trim();
+          if (errText && errText.length < 320 && P.isBusyMsg && P.isBusyMsg(errText)) {
+            const hint = P.bootErrorHint ? P.bootErrorHint(errText) : "";
+            diag("loop.providerError", { provider: P.id, text: errText.slice(0, 120) });
+            ui.banner("warn", `${P.displayName} returned an error`,
+              errText + (hint ? `\n\n${hint}` : ""));
+            break;
+          }
           if (A.started && amnesiaNudges < MAX_AMNESIA_NUDGES && isBridgeLive() && looksLikeBridgeAmnesia(res.text)) {
             amnesiaNudges++;
             resetSysCount();
@@ -1902,6 +1914,43 @@
     return text + rider;
   }
 
+  function bootFailureReason(res) {
+    if (!res) return { title: `${P.displayName} startup failed`, body: "No response received from the chat." };
+    if (res.kind === "context_limit") {
+      return {
+        title: `${P.displayName} reached its context limit`,
+        body: ((res.detail || "") + " Open a new chat and click Start again.").trim(),
+      };
+    }
+    if (res.kind === "too_long") {
+      return {
+        title: "Conversation too long",
+        body: `${P.displayName} rejected the prompt length. Open a new chat or shorten your Custom prompt.`,
+      };
+    }
+    if (res.kind === "timeout") {
+      return {
+        title: `No response from ${P.displayName}`,
+        body: `${P.displayName} did not respond in time during startup. Try again or switch models.`,
+      };
+    }
+    if (res.kind === "empty") {
+      return {
+        title: `${P.displayName} returned an empty reply`,
+        body: `${P.displayName} did not produce a reply at startup. Try clicking Start again or open a new chat.`,
+      };
+    }
+    const errText = (res.text || "").trim();
+    if (res.kind === "text" && errText && errText.length < 320 && P.isBusyMsg && P.isBusyMsg(errText)) {
+      const hint = P.bootErrorHint ? P.bootErrorHint(errText) : "";
+      return {
+        title: `${P.displayName} returned an error`,
+        body: errText + (hint ? `\n\n${hint}` : ""),
+      };
+    }
+    return null;
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   //  SESSION BOOTSTRAP  ("Starting Up" animated chip, shown in the conversation)
   // ════════════════════════════════════════════════════════════════════════
@@ -1946,11 +1995,15 @@
           `Could not switch ${P.displayName} to the required mode. Start a new chat or reload the page, then try again.`);
         return;
       }
-      P.setInputLock(true); // block user input during bootstrap (after readiness check!)
       ui.inputCover(true);  // cover the composer ("Working…") for the WHOLE Starting Up
       const prompt = systemPrompt();
       const base = await submitAndGetBase(prompt);
       if (!alive()) return;
+      if (!A.lastSendOk) {
+        diag("start.sendFailed", { provider: P.id });
+        return;
+      }
+      P.setInputLock(true); // lock user input once the bootstrap prompt has been dispatched
       // (syncSessionState pins A.startingKey to the conversation id once the chat
       // has content, and aborts this bootstrap if the user opens a new empty chat.)
       decorate.sweep(); // show the animated "Starting Up" chip immediately
@@ -1959,6 +2012,12 @@
       // The user halted the bootstrap (our Stop or the site's native stop). Do
       // NOT declare the session ready - abort quietly so "Start" stays available.
       if (A.stop || startRes.kind === "stopped") { diag("start.aborted", { kind: startRes.kind }); return; }
+      const startFail = bootFailureReason(startRes);
+      if (startFail) {
+        diag("start.failed", { provider: P.id, kind: startRes.kind, title: startFail.title });
+        ui.banner("warn", startFail.title, startFail.body);
+        return;
+      }
 
       // If the model calls list_commands as instructed, run it and wait for the "ready" reply.
       const firstName = startRes.calls && startRes.calls[0] && startRes.calls[0].tool;
@@ -1977,16 +2036,27 @@
         } else {
           // Count what the model ACTUALLY received: list_commands is scoped to the
           // primary Roblox server (main.js ~629), so showing A.toolList.length (every
-          // connected server merged - Roblox + Blender + addons) overstated the boot
+          // connected server merged - Roblox + addons) overstated the boot
           // count and made it look like all servers were loaded at once. Count the
           // Roblox-scoped tools instead, matching the real result.
           const robloxCount = A.toolList.filter((t) => (t.server || "roblox") === "roblox").length;
           decorate.toolBox(startRes.item, "Loading commands", "done", `${robloxCount} commands`, true);
         }
         const base2 = await submitAndGetBase(toolFeedback);
+        if (!alive()) return;
+        if (!A.lastSendOk) {
+          diag("start.send2Failed", { provider: P.id });
+          return;
+        }
         const readyRes = await waitForResponse(base2); // wait for "I'm ready" reply
         if (!alive()) return;
         if (A.stop || readyRes.kind === "stopped") { diag("start.aborted", { kind: readyRes.kind }); return; }
+        const readyFail = bootFailureReason(readyRes);
+        if (readyFail) {
+          diag("start.readyFailed", { provider: P.id, kind: readyRes.kind, title: readyFail.title });
+          ui.banner("warn", readyFail.title, readyFail.body);
+          return;
+        }
       }
       A.started = true;
       rememberSession(P.conversationKey()); // survives virtualization AND reloads
@@ -2643,14 +2713,14 @@
           <span id="zs-dot" class="off" title=""></span>
           <span id="zs-brand">ZeroScript <span class="zs-free">v${EXT_VERSION}</span></span>
           <span id="zs-state"></span>
-          <button id="zs-action"></button>
-          <button id="zs-stop" hidden>■ Stop</button>
+          <button id="zs-action" type="button"></button>
+          <button id="zs-stop" type="button" hidden>■ Stop</button>
           <a id="zs-discord" href="https://discord.gg/D5G2HAzX8z" target="_blank" rel="noopener" title="Need help? Join our Discord"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg></a>
-          <button id="zs-switch" aria-label="Switch AI and options" title="Switch AI, custom prompt, support"><span id="zs-switch-name"></span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-          <button id="zs-support" aria-label="Support ZeroScript" title="Support ZeroScript"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></button>
+          <button id="zs-switch" type="button" aria-label="Switch AI and options" title="Switch AI, custom prompt, support"><span id="zs-switch-name"></span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button id="zs-support" type="button" aria-label="Support ZeroScript" title="Support ZeroScript"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></button>
         </div>
         <div id="zs-menu" hidden></div>
-        ${P.unstableWarning ? `<button id="zs-unstable" aria-label="Provider may be unstable" hidden>⚠ unstable</button>` : ""}
+        ${P.unstableWarning ? `<button id="zs-unstable" type="button" aria-label="Provider may be unstable" hidden>⚠ unstable</button>` : ""}
       `;
       document.documentElement.appendChild(root);
       bar = root.querySelector("#zs-bar");
@@ -2672,7 +2742,10 @@
       document.documentElement.classList.add(`zs-site-${P.id}`);
 
       actionBtn.addEventListener("click", onActionClick);
-      stopBtn.addEventListener("click", stopLoop);
+      stopBtn.addEventListener("click", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        stopLoop();
+      });
       unstableEl = root.querySelector("#zs-unstable");
       if (unstableEl) {
         // Set the native tooltip via PROPERTY, not the HTML template: the warning
@@ -2723,7 +2796,8 @@
 
     // The primary button does different things depending on the current state
     // (set by renderBar via actionBtn.dataset.kind).
-    async function onActionClick() {
+    async function onActionClick(e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
       const kind = actionBtn.dataset.kind;
       if (kind === "start" || kind === "start-degraded") { startSession(); return; }
       if (kind === "switchmode" && P.switchToSupportedMode) {
@@ -2736,7 +2810,10 @@
           try { moved = !!(await P.openNewChat()); } catch {}
         }
         if (!moved) {
-          const site = AI_SITES.find((s) => s.name.toLowerCase() === (P.displayName || "").toLowerCase());
+          const site = AI_SITES.find((s) =>
+            (s.id && s.id === P.id) ||
+            s.name.toLowerCase() === (P.displayName || "").toLowerCase()
+          );
           if (site) location.assign(site.url);
         }
       }
@@ -2852,15 +2929,15 @@
       const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
       let sites = "";
       for (const s of AI_SITES) {
-        const current = s.name.toLowerCase() === here;
+        const current = (s.id && s.id === P.id) || s.name.toLowerCase() === here;
         const label = `<span class="zs-site-name"><span>${s.name}</span><span class="zs-site-host">${hostOf(s.url)}</span></span>`;
         sites += current
           ? `<div class="zs-site-opt zs-site-here">${label}<span class="zs-site-badge">active</span></div>`
-          : `<button class="zs-site-opt" data-u="${s.url}">${label}<span class="zs-site-go">&rarr;</span></button>`;
+          : `<button type="button" class="zs-site-opt" data-u="${s.url}">${label}<span class="zs-site-go">&rarr;</span></button>`;
       }
       let passes = "";
       for (const p of ROBUX_PASSES) {
-        passes += `<button class="zs-tip-opt zs-tip-rbx" data-u="${passUrl(p.id)}"><span class="zs-rbx-cur">R$</span>${p.robux}</button>`;
+        passes += `<button type="button" class="zs-tip-opt zs-tip-rbx" data-u="${passUrl(p.id)}"><span class="zs-rbx-cur">R$</span>${p.robux}</button>`;
       }
       const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       const mergedServers = mergedMcpServers();
@@ -2874,7 +2951,7 @@
         // yet (just added/removed, still restarting) - shown neutral, not red.
         const healthClass = s.alive === true ? "on" : s.alive === false ? "off" : "unknown";
         const healthTitle = s.alive === true ? `${s.tools || 0} tools available` : s.alive === false ? "offline" : "status unknown";
-        mcpList += `<div class="zs-mcp-item"><span class="zs-mcp-health zs-mcp-health-${healthClass}" title="${healthTitle}"></span><div class="zs-mcp-info"><span class="zs-mcp-name">${esc(s.name)}</span><span class="zs-mcp-url">${esc(s.command || s.id)}</span></div><button class="zs-mcp-remove" data-id="${esc(s.id)}" title="Remove">✕</button></div>`;
+        mcpList += `<div class="zs-mcp-item"><span class="zs-mcp-health zs-mcp-health-${healthClass}" title="${healthTitle}"></span><div class="zs-mcp-info"><span class="zs-mcp-name">${esc(s.name)}</span><span class="zs-mcp-url">${esc(s.command || s.id)}</span></div><button type="button" class="zs-mcp-remove" data-id="${esc(s.id)}" title="Remove">✕</button></div>`;
       });
       menuEl.innerHTML =
         `<div class="zs-menu-head"><span class="zs-menu-logo">ZeroScript</span><span class="zs-menu-tag">v${EXT_VERSION}</span></div>
@@ -2884,12 +2961,12 @@
          </section>
          <section class="zs-menu-sec">
            <div class="zs-sec-label"><span>Free Support</span></div>
-           <button class="zs-tip-opt zs-tip-star" data-u="${GITHUB_URL}"><span>Star on GitHub</span><span class="zs-tip-sub">free, helps a lot</span></button>
-           ${WORKINK_URL ? `<button class="zs-tip-opt zs-tip-ad" data-u="${WORKINK_URL}"><span>Watch an ad to support</span><span class="zs-tip-sub">free, takes a minute</span></button>` : ""}
+           <button type="button" class="zs-tip-opt zs-tip-star" data-u="${GITHUB_URL}"><span>Star on GitHub</span><span class="zs-tip-sub">free, helps a lot</span></button>
+           ${WORKINK_URL ? `<button type="button" class="zs-tip-opt zs-tip-ad" data-u="${WORKINK_URL}"><span>Watch an ad to support</span><span class="zs-tip-sub">free, takes a minute</span></button>` : ""}
          </section>
          <section class="zs-menu-sec">
            <div class="zs-sec-label"><span>Support with Robux / Ko-fi</span></div>
-           <button class="zs-tip-opt zs-tip-kofi" data-u="${KOFI_URL}"><span>Tip on Ko-fi</span><span class="zs-tip-sub">any amount</span></button>
+           <button type="button" class="zs-tip-opt zs-tip-kofi" data-u="${KOFI_URL}"><span>Tip on Ko-fi</span><span class="zs-tip-sub">any amount</span></button>
            <div class="zs-tip-sep">or tip in Robux</div>
            <div class="zs-rbx-grid">${passes}</div>
          </section>
@@ -2897,7 +2974,7 @@
            <div class="zs-sec-label"><span>Custom prompt</span></div>
            <div class="zs-menu-note">Added below the system prompt on every new session. The built-in prompt can't be edited.</div>
            <textarea id="zs-set-text" rows="4" placeholder="e.g. Always comment your Luau code. Prefer small modular scripts."></textarea>
-           <div class="zs-set-row"><button id="zs-set-save">Save</button><span id="zs-set-status"></span></div>
+           <div class="zs-set-row"><button type="button" id="zs-set-save">Save</button><span id="zs-set-status"></span></div>
          </section>
          <section class="zs-menu-sec">
            <div class="zs-sec-label"><span>MCP servers</span></div>
@@ -2906,7 +2983,7 @@
            <div class="zs-mcp-sep"></div>
            <input id="zs-mcp-name" class="zs-mcp-field" placeholder="Name, e.g. Blender" />
            <input id="zs-mcp-url" class="zs-mcp-field" placeholder="Start command, e.g. npx -y @some/mcp-server" />
-           <div class="zs-set-row"><button id="zs-mcp-add">Add server</button><span id="zs-mcp-status"></span></div>
+           <div class="zs-set-row"><button type="button" id="zs-mcp-add">Add server</button><span id="zs-mcp-status"></span></div>
          </section>`;
       const open = (url) => { try { window.open(url, "_blank", "noopener"); } catch {} menuEl.hidden = true; };
       menuEl.querySelectorAll("button.zs-site-opt, .zs-tip-opt").forEach((b) =>
@@ -3008,10 +3085,10 @@
         `</ol>` +
         `<div class="zs-setup-copy-row">` +
           `<input type="text" id="zs-setup-link" readonly value="${GITHUB_URL}">` +
-          `<button id="zs-setup-copy">Copy</button>` +
+          `<button type="button" id="zs-setup-copy">Copy</button>` +
         `</div>` +
         videoBtn +
-        `<button id="zs-setup-dismiss">Got it</button>`;
+        `<button type="button" id="zs-setup-dismiss">Got it</button>`;
       document.documentElement.appendChild(setupCard);
 
       setupCard.querySelector("#zs-setup-copy").addEventListener("click", () => {
@@ -3343,7 +3420,7 @@
       b.className = "zs-banner limit zs-stale";
       b.innerHTML = `<div class="zs-banner-t">⚠ Reload this page to reconnect ZeroScript</div>
         <div class="zs-banner-m">ZeroScript was updated or reloaded while this tab was open, so this page is still running the old copy and commands can no longer run. Your bridge and Roblox Studio are fine - only this page needs refreshing.</div>
-        <div class="zs-banner-acts"><button class="zs-banner-reload">Reload page</button></div>`;
+        <div class="zs-banner-acts"><button type="button" class="zs-banner-reload">Reload page</button></div>`;
       b.querySelector(".zs-banner-reload").addEventListener("click", () => location.reload());
       root.appendChild(b);
       bridgeBannerEl = b;
@@ -3365,7 +3442,7 @@
         : "";
       b.innerHTML = `<div class="zs-banner-t">⚠ Lost connection to ZeroScript</div>
         <div class="zs-banner-m">The ZeroScript bridge stopped on your PC. Open ZeroScript.vbs and keep Roblox Studio open: the agent will reconnect automatically as soon as it is detected again.</div>
-        <div class="zs-banner-acts">${videoLink}<button class="zs-banner-x">Close</button></div>`;
+        <div class="zs-banner-acts">${videoLink}<button type="button" class="zs-banner-x">Close</button></div>`;
       b.querySelector(".zs-banner-x").addEventListener("click", () => { b.remove(); if (bridgeBannerEl === b) bridgeBannerEl = null; });
       root.appendChild(b);
       bridgeBannerEl = b;
@@ -3867,7 +3944,7 @@
       b.className = `zs-banner ${kind}`;
       b.innerHTML = `<div class="zs-banner-t"></div><div class="zs-banner-m"></div>
         <div class="zs-banner-acts">
-          <button class="zs-banner-x">Close</button>
+          <button type="button" class="zs-banner-x">Close</button>
         </div>`;
       b.querySelector(".zs-banner-t").textContent = title;
       b.querySelector(".zs-banner-m").textContent = msg;

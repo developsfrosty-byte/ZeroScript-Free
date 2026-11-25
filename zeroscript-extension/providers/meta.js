@@ -653,6 +653,20 @@ const ZSProvider = (() => {
   const isTooLongMsg = (text) => RE.tooLong.test(text);
   const isBusyMsg = (text) => RE.busy.test(text);
 
+  async function openNewChat() {
+    for (const sel of [S.newChat, 'a[href="/"]', 'button[aria-label*="New" i]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.closest("#zs-root") && el.offsetParent !== null) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://www.meta.ai/");
+    return true;
+  }
+
   // /  = a fresh chat with no conversation id yet → "" (never persisted as
   // "started"). A real conversation is /prompt/<uuid>.
   const conversationKey = () => (location.pathname === "/" ? "" : location.pathname);
@@ -783,6 +797,6 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey, installSendHooks, findToolBlockSpot,
+    attachImages, clearAttachments, openNewChat, conversationKey, installSendHooks, findToolBlockSpot,
   };
 })();

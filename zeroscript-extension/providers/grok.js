@@ -113,13 +113,40 @@ const ZSProvider = (() => {
     return out;
   }
 
+  function explicitRole(item) {
+    if (!item) return null;
+    const role = (item.getAttribute && (item.getAttribute("data-message-author-role") || item.getAttribute("data-author"))) || "";
+    if (/^user$/i.test(role)) return "user";
+    if (/^(?:assistant|model|grok)$/i.test(role)) return "assistant";
+    const tid = (item.getAttribute && item.getAttribute("data-testid")) || "";
+    if (/user/i.test(tid)) return "user";
+    if (/assistant|response|model/i.test(tid)) return "assistant";
+    if (item.querySelector && item.querySelector(S.asstBody)) return "assistant";
+    if (item.querySelector && item.querySelector('button[aria-label*="Copy" i], button[aria-label*="Regenerate" i], button[aria-label*="Retry" i], button[aria-label*="Copier" i]')) {
+      return "assistant";
+    }
+    const cl = (item.className || "").toString();
+    if (/\bitems-end\b|\bself-end\b|\bjustify-end\b|\bml-auto\b/.test(cl)) return "user";
+    if (/\bitems-start\b|\bself-start\b|\bjustify-start\b/.test(cl)) return "assistant";
+    return null;
+  }
+
   function isUserItem(item) {
     if (!item) return false;
-    const role = item.getAttribute && item.getAttribute("data-message-author-role");
-    if (role) return role === "user";
-    if (item.querySelector && item.querySelector(S.asstBody)) return false;
-    const cl = (item.className || "").toString();
-    return /\bitems-end\b|\bself-end\b|\bjustify-end\b/.test(cl) || !item.querySelector("pre, .response-content-markdown");
+    const direct = explicitRole(item);
+    if (direct) return direct === "user";
+    const items = allItems();
+    const idx = items.indexOf(item);
+    if (idx >= 0) {
+      let userNext = true;
+      for (let i = 0; i <= idx; i++) {
+        const r = explicitRole(items[i]);
+        const isU = r ? r === "user" : userNext;
+        if (i === idx) return isU;
+        userNext = !isU;
+      }
+    }
+    return false;
   }
   const isAssistantItem = (item) => !!item && !isUserItem(item);
 
@@ -246,15 +273,44 @@ const ZSProvider = (() => {
     }
   }
 
-  function firstVisible(sels) {
+  const NON_SEND_BTN_RE = /\b(?:stop|arr[êe]t|cancel|attach|upload|file|image|photo|add|plus|mic|voice|audio|speak|dictat|model|mode|think|deepsearch|search|menu|close|dismiss|toggle)\b/i;
+  function firstVisible(sels, excludeSels) {
+    const ed = getEditor();
+    const scope = barAnchor() || composerFrame() || (ed && ed.parentElement);
     for (const sel of sels) {
+      if (scope && scope.querySelectorAll) {
+        for (const b of scope.querySelectorAll(sel)) {
+          if (excludeSels && excludeSels.some((ex) => b.matches(ex))) continue;
+          if (isVisibleBox(b)) return b;
+        }
+      }
+      if (sel === 'button[type="submit"]') continue; // never match non-composer submit buttons globally
       for (const b of document.querySelectorAll(sel)) {
+        if (excludeSels && excludeSels.some((ex) => b.matches(ex))) continue;
         if (isVisibleBox(b)) return b;
       }
     }
     return null;
   }
-  const sendButton = () => firstVisible(S.sendSels);
+  function sendButton() {
+    const direct = firstVisible(S.sendSels, S.stopSels);
+    if (direct) return direct;
+    const ed = getEditor();
+    const scope = barAnchor() || composerFrame() || (ed && ed.parentElement);
+    if (!scope || !scope.querySelectorAll) return null;
+    let best = null, bestRight = -Infinity;
+    for (const b of scope.querySelectorAll("button")) {
+      if (!isVisibleBox(b) || b.disabled || b.getAttribute("aria-disabled") === "true") continue;
+      if (S.stopSels.some((ex) => b.matches(ex))) continue;
+      const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""}`.trim();
+      if (NON_SEND_BTN_RE.test(sig)) continue;
+      if (!b.querySelector("svg")) continue;
+      const r = b.getBoundingClientRect ? b.getBoundingClientRect() : null;
+      const right = r ? r.right : 0;
+      if (right >= bestRight) { bestRight = right; best = b; }
+    }
+    return best;
+  }
   const stopButton = () => firstVisible(S.stopSels);
 
   function streamText(item) { return item ? textWithout(item, ".zs-chip") : ""; }
@@ -341,16 +397,24 @@ const ZSProvider = (() => {
     return out;
   }
 
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
   function setTextareaValue(el, v) {
     const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
     const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
     if (setter && setter.set) setter.set.call(el, v);
     else el.value = v;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+    try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { el.dispatchEvent(new Event("input", { bubbles: true })); }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
     if (ed.tagName === "TEXTAREA") {
       setTextareaValue(ed, text);
       return;
@@ -366,6 +430,20 @@ const ZSProvider = (() => {
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
     }
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      ed.textContent = String(text);
+      try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+      catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
   }
 
   async function typeAndSend(text, images) {
@@ -377,14 +455,27 @@ const ZSProvider = (() => {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
       else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      if (editorText() !== text) await setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       if (images && images.length) {
         try { await attachImages(images); } catch {}
       }
       await waitFor(() => { const b = sendButton(); return !!b && !b.disabled; }, 3500);
       const btn = sendButton();
-      if (btn && !btn.disabled) { btn.click(); return; }
+      if (btn && !btn.disabled) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+        const btn2 = sendButton();
+        if (btn2 && !btn2.disabled) {
+          for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+            btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+          }
+          if (await waitFor(wasSent, 300)) return;
+        }
+      }
+      ed.focus();
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
@@ -486,8 +577,10 @@ const ZSProvider = (() => {
       if (!getEditor()) return;
       const b = e.target && e.target.closest && e.target.closest("button");
       if (!b) return;
+      const scope = barAnchor() || composerFrame();
+      if (scope && !scope.contains(b)) return;
       if (S.stopSels.some((sel) => b.matches(sel))) { handlers.onNativeStop(); return; }
-      if (!S.sendSels.some((sel) => b.matches(sel))) return;
+      if (!S.sendSels.some((sel) => b.matches(sel)) && b !== sendButton()) return;
       if (b.disabled) return;
       if (handlers.isBlocked()) return;
       if (!handlers.isStarted()) {
@@ -534,7 +627,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-grok-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-grok-ver", "2026-11-25_v1.9.1"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,

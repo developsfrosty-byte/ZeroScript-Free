@@ -27,6 +27,7 @@ const ZSProvider = (() => {
   "use strict";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let diag = () => {}; // injected by core via init()
+  let _locked = false, _lockedEl = null;
 
   const S = {
     userItem: "user-query",
@@ -35,6 +36,14 @@ const ZSProvider = (() => {
     reply: "message-content",
     thinking: "model-thoughts",
     editor: ".ql-editor[contenteditable='true']",
+    editorSels: [
+      ".ql-editor[contenteditable='true']",
+      "rich-textarea [contenteditable='true']",
+      "input-area-v2 [contenteditable='true']",
+      "[role='textbox'][contenteditable='true']",
+      "input-area-v2 textarea:not([aria-hidden='true'])",
+      ".ql-editor",
+    ],
     inputArea: "input-area-v2",
     codeWrap: "code-block",
     errorSurfaces: 'mat-snack-bar-container,[role="alert"],[class*="error-message"]',
@@ -121,17 +130,41 @@ const ZSProvider = (() => {
   // site editor this returns null, keeping the "not on a chat page" guard in
   // the send hooks intact (otherwise our own textarea would defeat it and the
   // hooks could swallow the site's login button).
+  function isVisibleBox(el, minW = 0, minH = 0) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (el.getAttribute && el.getAttribute("aria-hidden") === "true") return false;
+    if (!el.getBoundingClientRect) return true;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    if (minW && r.width < minW) return false;
+    if (minH && r.height < minH) return false;
+    try {
+      const st = getComputedStyle(el);
+      if (st.display === "none" || st.visibility === "hidden") return false;
+    } catch {}
+    return true;
+  }
+
   const getEditor = () => {
-    for (const sel of [S.editor, ".ql-editor"]) {
+    if (_locked && _lockedEl && _lockedEl.isConnected && isVisibleBox(_lockedEl)) return _lockedEl;
+    const lockedWrap = document.querySelector('[data-zs-locked="1"]');
+    if (lockedWrap) {
+      const lockedEd = lockedWrap.matches && lockedWrap.matches(S.editorSels.join(","))
+        ? lockedWrap
+        : lockedWrap.querySelector && lockedWrap.querySelector(S.editorSels.join(","));
+      if (lockedEd && isVisibleBox(lockedEd)) return lockedEd;
+    }
+    for (const sel of S.editorSels) {
       for (const e of document.querySelectorAll(sel)) {
-        if (!e.closest("#zs-root")) return e;
+        if (isVisibleBox(e)) return e;
       }
     }
     return null;
   };
   const editorText = () => {
     const e = getEditor();
-    return e ? e.textContent || "" : "";
+    if (!e) return "";
+    return e.tagName === "TEXTAREA" ? (e.value || "") : (e.textContent || "");
   };
 
   const lastAssistant = () => {
@@ -151,46 +184,138 @@ const ZSProvider = (() => {
   const isFreshChat = () => chatIsEmpty() && !!getEditor();
 
   // The composer box the Start gate hides as one unit.
-  const composerFrame = () => document.querySelector(S.inputArea);
+  const composerFrame = () => {
+    const ia = document.querySelector(S.inputArea);
+    if (ia && isVisibleBox(ia)) return ia;
+    const ed = getEditor();
+    return ed ? (ed.closest(S.inputArea) || ed.closest(".input-area-container") || ed.closest("rich-textarea") || ed.parentElement) : null;
+  };
 
-  // Where the core mounts its in-flow status bar. The <input-area-v2> composer
-  // sits inside a flex-COLUMN <fieldset.input-area-container>, so inserting the
-  // bar right before the composer makes it span the full input width and push
-  // the composer down (validated live). Returns {parent, before}.
-  function barMount() {
-    const ia = composerFrame();
-    if (!ia) return null;
-    const col = ia.parentElement; // fieldset.input-area-container (flex column)
-    if (!col) return null;
-    return { parent: col, before: ia };
+  function isAnchorCandidate(el) {
+    if (!el || (el.closest && el.closest("#zs-root"))) return false;
+    if (!el.getBoundingClientRect) return true;
+    const r = el.getBoundingClientRect();
+    const maxW = Math.min((window.innerWidth || 1280) - 16, 1100);
+    return (
+      r.width >= 260 && r.width <= maxW &&
+      r.height >= 40 && r.height <= 320 &&
+      r.top >= 4 && r.bottom <= (window.innerHeight || 900) + 20
+    );
+  }
+
+  // Anchor #zs-bar outside Angular's DOM (inside #zs-root) so Angular change
+  // detection / fieldset reconciliation can never detach #zs-bar or cancel clicks.
+  function barAnchor() {
+    const ed = getEditor();
+    if (!ed) return null;
+    const candidates = [
+      ed.closest(".input-area-container"),
+      ed.closest(S.inputArea),
+      ed.closest(".text-input-field"),
+      composerFrame(),
+    ];
+    for (const c of candidates) {
+      if (c && isVisibleBox(c) && isAnchorCandidate(c)) return c;
+    }
+    let n = ed.parentElement;
+    for (let i = 0; i < 8 && n && n !== document.body && n.tagName !== "MAIN"; i++) {
+      if (n.closest && n.closest("#zs-root")) break;
+      const cl = [...(n.classList || [])];
+      if (cl.some((c) => c.startsWith("rounded") || c.includes("input-area")) && isAnchorCandidate(n)) return n;
+      n = n.parentElement;
+    }
+    const f = composerFrame();
+    return f && isAnchorCandidate(f) ? f : null;
   }
 
   // ── Input lock ────────────────────────────────────────────────────────────
   // Quill is a contenteditable: flipping contenteditable=false would also block
   // our own execCommand injection, so typeAndSend temporarily re-enables it.
-  let _locked = false;
   function setInputLock(on) {
     _locked = on;
     const ed = getEditor();
-    if (!ed) return;
-    ed.setAttribute("contenteditable", on ? "false" : "true");
-    const ph = ed.closest("rich-textarea") || ed;
-    if (on) ph.setAttribute("data-zs-locked", "1");
-    else ph.removeAttribute("data-zs-locked");
+    if (on) {
+      if (!ed) return;
+      _lockedEl = ed;
+      if (ed.tagName === "TEXTAREA") {
+        ed.setAttribute("readonly", "");
+      } else {
+        if (!ed.dataset.zsPrevCe) ed.dataset.zsPrevCe = ed.getAttribute("contenteditable") || "true";
+        ed.setAttribute("contenteditable", "false");
+      }
+      const ph = ed.closest("rich-textarea") || ed;
+      ph.setAttribute("data-zs-locked", "1");
+      return;
+    }
+    const targets = [];
+    if (ed) targets.push(ed);
+    if (_lockedEl && _lockedEl !== ed && _lockedEl.isConnected) targets.push(_lockedEl);
+    _lockedEl = null;
+    for (const t of targets) {
+      if (t.tagName === "TEXTAREA") {
+        t.removeAttribute("readonly");
+      } else {
+        t.setAttribute("contenteditable", t.dataset.zsPrevCe || "true");
+        delete t.dataset.zsPrevCe;
+      }
+      const ph = t.closest("rich-textarea") || t;
+      ph.removeAttribute("data-zs-locked");
+      t.removeAttribute("data-zs-locked");
+    }
   }
 
   // ── Action button (send / stop / mic) ─────────────────────────────────────
   const iconName = (el) => {
-    const i = el && el.querySelector("mat-icon");
-    return i ? (i.getAttribute("fonticon") || i.getAttribute("data-mat-icon-name") || (i.textContent || "").trim()) : "";
+    const i = el && el.querySelector && el.querySelector("mat-icon");
+    if (!i) return "";
+    return (i.getAttribute("fonticon") || i.getAttribute("data-mat-icon-name") || (i.textContent || "").trim()).toLowerCase();
   };
-  function actionButtons() {
-    const box = document.querySelector(S.inputArea);
-    return box ? [...box.querySelectorAll("button")].filter((b) => b.offsetParent !== null) : [];
+  const isBtnDisabled = (b) => !b || !!b.disabled || b.getAttribute("aria-disabled") === "true";
+  const STOP_ICONS = new Set(["stop", "stop_circle", "square"]);
+  const SEND_ICONS = new Set(["arrow_upward", "send", "send_spark", "north"]);
+  const NON_SEND_BTN_RE = /\b(?:add|plus|mic|microphone|voice|audio|record|dictat|upload|attach|file|image|photo|menu|model|mode|tool|tools|canvas|deep\s*research|close|dismiss|expand|collapse|more)\b/i;
+
+  function isStopButton(b) {
+    if (!b) return false;
+    const ic = iconName(b);
+    if (STOP_ICONS.has(ic)) return true;
+    const aria = (b.getAttribute && b.getAttribute("aria-label")) || "";
+    const cls = (b.className || "").toString();
+    if (/^(?:stop|arr[êe]t|interrompre|cancel)\b/i.test(aria.trim())) return true;
+    return /\bstop\b/i.test(cls) && !SEND_ICONS.has(ic);
   }
-  const findButtonByIcon = (name) => actionButtons().find((b) => iconName(b) === name) || null;
-  const sendButton = () => findButtonByIcon("arrow_upward");
-  const stopButton = () => findButtonByIcon("stop");
+
+  function isSendButton(b) {
+    if (!b || isStopButton(b) || isBtnDisabled(b)) return false;
+    const ic = iconName(b);
+    if (SEND_ICONS.has(ic)) return true;
+    const cls = (b.className || "").toString();
+    if (/\bsend-button\b|\bsubmit\b/i.test(cls)) return true;
+    const aria = (b.getAttribute && b.getAttribute("aria-label")) || "";
+    return /\b(?:send|submit|envoyer|enviar|senden|发送|送信)\b/i.test(aria) && !NON_SEND_BTN_RE.test(aria);
+  }
+
+  function actionButtons() {
+    const box = composerFrame() || barAnchor() || document.querySelector(S.inputArea);
+    return box ? [...box.querySelectorAll("button")].filter((b) => isVisibleBox(b)) : [];
+  }
+  function sendButton() {
+    const btns = actionButtons();
+    const explicit = btns.find((b) => isSendButton(b));
+    if (explicit) return explicit;
+    let best = null, bestRight = -Infinity;
+    for (const b of btns) {
+      if (isStopButton(b) || isBtnDisabled(b)) continue;
+      const sig = `${b.getAttribute("aria-label") || ""} ${b.textContent || ""} ${iconName(b)}`.trim();
+      if (NON_SEND_BTN_RE.test(sig)) continue;
+      if (!b.querySelector("mat-icon, svg")) continue;
+      const r = b.getBoundingClientRect ? b.getBoundingClientRect() : null;
+      const right = r ? r.right : 0;
+      if (right >= bestRight) { bestRight = right; best = b; }
+    }
+    return best;
+  }
+  const stopButton = () => actionButtons().find((b) => isStopButton(b)) || null;
 
   // ── Generation detection ──────────────────────────────────────────────────
   // The stop icon is present for the ENTIRE generation (validated live), which
@@ -385,9 +510,29 @@ const ZSProvider = (() => {
   // click for its entire duration (the "I can't click anything anymore" report).
   // Yielding does not make the insert faster, it makes the page stay alive while
   // it happens - and lets the Stop button remain usable.
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
+  function setTextareaValue(el, v) {
+    const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
+    const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
+    if (setter && setter.set) setter.set.call(el, v);
+    else el.value = v;
+    try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { el.dispatchEvent(new Event("input", { bubbles: true })); }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   const INSERT_CHUNK_LINES = 120;
   async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
+    if (ed.tagName === "TEXTAREA") {
+      setTextareaValue(ed, text);
+      return;
+    }
     const sel = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(ed);
@@ -400,30 +545,37 @@ const ZSProvider = (() => {
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
     }
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      ed.textContent = String(text);
+      try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+      catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
     if (lines.length > INSERT_CHUNK_LINES) diag("send.insertDone", { lines: lines.length, ms: Date.now() - t0 });
   }
 
   async function typeAndSend(text, images) {
     const ed = getEditor();
     if (!ed) throw new Error("Gemini input box not found");
-    // Cap BEFORE any comparison below, so the retry path's `editorText() !== text`
-    // test compares against what we actually typed.
     text = truncateForSend(text);
     const relock = _locked;
-    if (relock) ed.setAttribute("contenteditable", "true"); // injection needs it editable
+    if (relock) {
+      if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
+      else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
+    }
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      // submitAndGetBase RETRIES this whole function (up to 4x) when the send
-      // doesn't land within its window. Naively redoing both steps every retry
-      // is destructive: (1) setEditorText's select-all + insertText wipes the
-      // editor's internal reference to whatever is already pending, and (2)
-      // pasting again attaches ANOTHER duplicate file on top of the first
-      // (validated live: 3 retries produced 3 separate attach.dispatchPaste
-      // calls with 3 different files, and the model's replies stayed generic
-      // - it never got one coherent image). So: only retype if the text isn't
-      // already there, and only attach if nothing is pending yet.
-      if (editorText() !== text) await setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       const hasPendingAttachment = () => {
-        const box = document.querySelector(S.inputArea);
+        const box = composerFrame() || document.querySelector(S.inputArea);
         return !!(box && box.querySelector("[class*='preview'], [class*='thumbnail']"));
       };
       if (images && images.length && !hasPendingAttachment()) {
@@ -431,33 +583,34 @@ const ZSProvider = (() => {
         try { const ok = await attachImages(images); diag("attach.afterCall", { ok }); }
         catch (e) { diag("attach.threw", { msg: String((e && e.message) || e) }); }
       }
-      // A generation that just ended can leave the action button WEDGED on the
-      // stop icon (see unwedgeStop), so arrow_upward never appears and the send
-      // fails. If the stream is frozen yet a stop button shows, reset it first.
       if (!sendButton()) await unwedgeStopPersistently();
-      // Wait for Angular to render the send (arrow_upward) button - proof that
-      // it registered the text. The Quill-API injection (see setEditorText)
-      // fires text-change so this resolves; if it doesn't, the send won't work.
       await waitFor(() => !!sendButton(), 3000);
-      // Last resort before the Enter fallback: re-type. A composer that was
-      // wedged when setEditorText ran can swallow the insert entirely, leaving
-      // an empty editor and therefore no send button - the "Start did nothing,
-      // the system prompt was never sent" report. Retyping now that the stop is
-      // cleared is safe: the editor is either empty or holds our own text.
-      if (!sendButton() && editorText() !== text) {
+      if (!sendButton() && !sameText(editorText(), text)) {
         diag("send.retype", {});
         await setEditorText(ed, text);
         await waitFor(() => !!sendButton(), 2000);
       }
       const btn = sendButton();
       diag("send.click", { found: !!btn, pending: hasPendingAttachment() });
-      if (btn) { btn.click(); return; }
+      if (btn) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+        const btn2 = sendButton();
+        if (btn2) {
+          for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+            btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+          }
+          if (await waitFor(wasSent, 300)) return;
+        }
+      }
       // Fallback: Enter sends in Gemini's composer.
+      ed.focus();
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
     } finally {
-      if (relock) { const e2 = getEditor(); if (e2) e2.setAttribute("contenteditable", "false"); }
+      if (relock) setInputLock(true);
     }
   }
 
@@ -550,6 +703,20 @@ const ZSProvider = (() => {
   }
 
 
+  async function openNewChat() {
+    for (const sel of ['a[href="/app"]', 'button[aria-label*="New chat" i]', 'a[aria-label*="New chat" i]', 'button[aria-label*="Nouvelle discussion" i]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisibleBox(el)) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://gemini.google.com/app");
+    return true;
+  }
+
   // A conversation with NO turns rendered yet is treated as transient ("") so
   // the core never persists it - and never stays sticky on it - as "started".
   // This covers both the bare "/app" route AND Gemini's "New chat" button,
@@ -590,19 +757,15 @@ const ZSProvider = (() => {
       (e) => {
         if (!e.isTrusted) return;
         if (!getEditor()) return;
-        const btn = e.target && e.target.closest && e.target.closest(`${S.inputArea} button`);
+        const btn = e.target && e.target.closest && e.target.closest(`${S.inputArea} button, button`);
         if (!btn) return;
-        const ic = iconName(btn);
-        if (ic === "stop") {
-          // Only a REAL user click is a native stop. unwedgeStop() clicks this
-          // same button programmatically to reset a frozen stop icon before a
-          // send - that synthetic click (isTrusted=false) must NOT be mistaken
-          // for the user halting the agent, or the next legit command gets
-          // marked "stopped" and the loop wrongly winds down (seen live).
+        const scope = composerFrame() || barAnchor();
+        if (scope && !scope.contains(btn)) return;
+        if (isStopButton(btn)) {
           handlers.onNativeStop();
           return;
         }
-        if (ic !== "arrow_upward") return;
+        if (!isSendButton(btn) && btn !== sendButton()) return;
         if (handlers.isBlocked()) return;
         if (!handlers.isStarted()) {
           if (!chatIsEmpty()) return;
@@ -700,21 +863,21 @@ const ZSProvider = (() => {
       "Gemini can drift back into plain-text replies in very long sessions. ZeroScript auto-refreshes its instructions and auto-recovers if it forgets, or you can start a new session anytime.",
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-gem-ver", "2026-11-21_gemini-fixes"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-gem-ver", "2026-11-25_v1.9.1"); } catch {}
     },
     // turns
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, readAssistant,
     streamLen, snapshot,
     // composer / state
-    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barMount,
+    getEditor, editorText, chatIsEmpty, isFreshChat, composerFrame, barAnchor,
     setInputLock, typeAndSend, stopGeneration,
     isGenerating, isBusyNow, isHardGenerating,
     enforceComposer, ensureComposerReady,
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
     promptExtra: PROMPT_EXTRA,
     resendSystemEvery: 4,

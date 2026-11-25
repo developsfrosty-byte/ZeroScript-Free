@@ -520,7 +520,10 @@ const ZSProvider = (() => {
     }
     try {
       editor.focus();
-      await setEditorValue(editor, truncateForSend(text));
+      const trimmed = truncateForSend(text);
+      if (editorText().replace(/\s+/g, "") !== String(trimmed || "").replace(/\s+/g, "")) {
+        await setEditorValue(editor, trimmed);
+      }
       if (images && images.length) tagImages(images);
       diag("arena.tas.enter", {
         textLen: (text || "").length,

@@ -398,16 +398,24 @@ const ZSProvider = (() => {
     return out;
   }
 
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
   function setTextareaValue(el, v) {
     const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
     const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
     if (setter && setter.set) setter.set.call(el, v);
     else el.value = v;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+    try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { el.dispatchEvent(new Event("input", { bubbles: true })); }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
     if (ed.tagName === "TEXTAREA") {
       setTextareaValue(ed, text);
       return;
@@ -423,6 +431,20 @@ const ZSProvider = (() => {
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
     }
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      ed.textContent = String(text);
+      try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+      catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
   }
 
   async function typeAndSend(text, images) {
@@ -434,14 +456,27 @@ const ZSProvider = (() => {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
       else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      if (editorText() !== text) await setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       if (images && images.length) {
         try { await attachImages(images); } catch {}
       }
       await waitFor(() => { const b = sendButton(); return !!b && !b.disabled; }, 3500);
       const btn = sendButton();
-      if (btn && !btn.disabled) { btn.click(); return; }
+      if (btn && !btn.disabled) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+        const btn2 = sendButton();
+        if (btn2 && !btn2.disabled) {
+          for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+            btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+          }
+          if (await waitFor(wasSent, 300)) return;
+        }
+      }
+      ed.focus();
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
@@ -600,7 +635,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-mistral-ver", "2026-11-22_v1.7.1-vibe"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-mistral-ver", "2026-11-25_v1.9.1"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,

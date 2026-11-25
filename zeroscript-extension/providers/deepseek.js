@@ -830,6 +830,20 @@ const ZSProvider = (() => {
     return await waitFor(() => attachThumbs().length >= want, 15000);
   }
 
+  async function openNewChat() {
+    for (const sel of ['a[href="/"]', '[class*="new-chat"]', 'button[aria-label*="New" i]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.closest("#zs-root") && el.offsetParent !== null) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://chat.deepseek.com/");
+    return true;
+  }
+
   // Stable identity of the current conversation (used to persist "started").
   // The root path = a fresh chat with no id yet → "" (transient, never persisted).
   const conversationKey = () => (location.pathname === "/" ? "" : location.pathname);
@@ -1000,7 +1014,7 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
   };
 })();

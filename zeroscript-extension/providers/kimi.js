@@ -402,14 +402,29 @@ const ZSProvider = (() => {
   // Lexical contenteditable: select-all then a single execCommand("insertText")
   // drives the native editing pipeline so Lexical's model updates and the send
   // control enables.
-  function setEditorText(ed, text) {
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
+  async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
     const sel = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(ed);
     sel.removeAllRanges();
     sel.addRange(range);
     document.execCommand("insertText", false, text);
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
   }
 
   async function typeAndSend(text, images) {
@@ -417,8 +432,9 @@ const ZSProvider = (() => {
     if (!ed) throw new Error("Kimi input box not found");
     const relock = _locked;
     if (relock) { _injecting = true; ed.setAttribute("contenteditable", "true"); } // injection needs it editable
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      if (editorText() !== text) setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       // Attach images LAST, right before the send click - see gemini.js's
       // typeAndSend for why (attaching before retyping the text can sever the
       // site's binding between the pending upload and the message being sent).
@@ -428,10 +444,22 @@ const ZSProvider = (() => {
         try { await attachImages(images); } catch {}
       }
       // Wait for the send control to enable (proof Lexical registered the text).
-      await waitFor(() => !!sendButton(), 1500);
+      await waitFor(() => !!sendButton(), 2000);
       const btn = sendButton();
-      if (btn) { btn.click(); return; }
+      if (btn) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+        const btn2 = sendButton();
+        if (btn2) {
+          for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+            btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+          }
+          if (await waitFor(wasSent, 300)) return;
+        }
+      }
       // Fallback: Enter sends in Lexical's composer.
+      ed.focus();
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
@@ -659,6 +687,20 @@ const ZSProvider = (() => {
     } catch {}
   }
 
+  async function openNewChat() {
+    for (const sel of ['a[href="/"]', '.new-chat-btn', 'button[aria-label*="New" i]', '[class*="new-chat"]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.closest("#zs-root") && el.offsetParent !== null) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://www.kimi.ai/");
+    return true;
+  }
+
   // /chat/<id> = a real conversation. "/" = a fresh chat with no id yet → ""
   // (transient) so the core never persists it as "started".
   const conversationKey = () => (/^\/?$/.test(location.pathname) ? "" : location.pathname);
@@ -808,7 +850,7 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
   };
 })();

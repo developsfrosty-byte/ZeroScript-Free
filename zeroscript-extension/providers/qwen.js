@@ -760,6 +760,20 @@ const ZSProvider = (() => {
   const conversationKey = () =>
     /^\/?$/.test(location.pathname) ? "" : location.pathname;
 
+  async function openNewChat() {
+    for (const sel of ['a[href="/"]', '[class*="new-chat"]', 'button[aria-label*="New" i]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.closest("#zs-root") && el.offsetParent !== null) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://chat.qwen.ai/");
+    return true;
+  }
+
   // ── User-send interception ────────────────────────────────────────────────
   function installSendHooks(handlers) {
     document.addEventListener(
@@ -1008,7 +1022,7 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn, replyUnsettled, isComparisonTurn, resolveComparison,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
   };
 })();

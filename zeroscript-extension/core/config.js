@@ -272,8 +272,8 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       const parts = ["\n\n━━━ AGENT SKILLS (PRO PLAYBOOKS) ━━━"];
       if (autoSkills.length) {
         parts.push(
-          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves 1:1 game recreation/cloning, Motor6D/KeyframeSequence animations or procedural motion, creature/facial/state-machine rigging, character movement/parkour/camera feel, 1:1 map & biome design, UI/HUD, reference UI & mobile/gamepad UX, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore/trading, pets/quests/lobbies, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
-          autoSkills.map((s) => `- ${s.id} (${s.name}): ${s.tagline || s.category || "Pro playbook"}`).join("\n")
+          "You have AAA Roblox Studio playbooks installed. For 1:1 game cloning, Motor6D/KeyframeSequence animations, procedural rigging/gaits, movement/camera feel, maps/biomes, UI/UX, cutscenes, combat/VFX, Luau architecture/DataStore/trading, pets/quests/lobbies, NPC AI, lighting/audio, economy, or performance matching a skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building:\n" +
+          autoSkills.map((s) => `- ${s.id}: ${s.tagline || s.name || s.category || "Pro playbook"}`).join("\n")
         );
       }
       for (const s of alwaysSkills) {
@@ -282,14 +282,14 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       skillsSection = parts.join("\n\n");
     }
 
-    const toolkitSection = `\n\n━━━ ZEROSCRIPT BUILT-IN TOOLKIT (ALWAYS AVAILABLE) ━━━
-In addition to Studio MCP commands, these local engineering tools are ALWAYS ready via standard JSON commands:
-- \`route_skills\` {"query": "what user asked", "limit": 4} — auto-picks top playbooks, genre styles & starter Luau modules for complex prompts.
-- \`audit_luau\` {"code": "...", "filename": "Name.server.luau", "context": "server|client|shared"} — 60-gate static Luau security, leak & bug scanner; run BEFORE finishing important server/client scripts!
-- \`list_luau_modules\` {} / \`get_luau_module\` {"module_id": "TokenBucket"} — fetch 19 battle-tested standalone Luau modules (TokenBucket, AttackWindow, RevisionGate, RevisionTrade, Finite, RequestEpoch, ScopedRay, CriticalSpring, ModalTransition, HealthBinding, ViewportFit, BoundedPool, Formation, StableSelection, CleanupScope, WeightedChoice, RigMap, MaterialBinding, StudioProbe).
-- \`get_style_guide\` {"genre": "anime"} — inspect 12 genre design tokens & anti-slop rules before building UI/worlds.
-- \`diagnose_bug\` {"query": "foot slide"} — lookup Symptom -> Probe -> Repair -> Retest recipes and Roblox API gotchas.
-- \`memory_read\` {"query": ""} / \`memory_write\` {"key": "...", "value": "...", "kind": "decision|project|style|asset|failure|progress", "project": "default"} — fast local architecture ledger persisted in ZeroScript alongside Studio memory.`;
+    const toolkitSection = `\n\n━━━ ZEROSCRIPT BUILT-IN TOOLKIT ━━━
+Always available via standard JSON commands:
+- \`route_skills\` {"query": "...", "limit": 4} — auto-picks top playbooks, genre style & starter modules.
+- \`audit_luau\` {"code": "...", "filename": "Name.server.luau", "context": "server|client|shared"} — 60-gate static Luau security, leak & bug scanner; run before finalizing scripts.
+- \`list_luau_modules\` {} / \`get_luau_module\` {"module_id": "TokenBucket"} — fetch 19 standalone starter Luau modules.
+- \`get_style_guide\` {"genre": "anime"} — 12 genre design tokens & anti-slop rubric.
+- \`diagnose_bug\` {"query": "..."} — Symptom -> Probe -> Repair -> Retest recipes & API gotchas.
+- \`memory_read\` {"query": ""} / \`memory_write\` {"key": "...", "value": "...", "kind": "decision|project|style|asset|failure|progress", "project": "default"} — fast local project ledger.`;
 
     // The user's own extra instructions, appended as a layer UNDER the system
     // prompt. Optional - empty by default. It cannot change the rules above.

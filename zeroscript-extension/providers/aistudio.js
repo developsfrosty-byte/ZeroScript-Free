@@ -54,7 +54,7 @@ const ZSProvider = (() => {
   const RE = {
     contextLimit: /context.{0,25}(limit|length|exceeded)|token limit|prompt.{0,20}too long|too many tokens/i,
     tooLong: /conversation.{0,25}(too long|getting long)|token limit/i,
-    busy: /rate limit|too many requests|quota|resource exhausted|internal error|something went wrong|try again later/i,
+    busy: /an internal error has occurred|internal error|rate limit|too many requests|quota|resource exhausted|service unavailable|overloaded|something went wrong|try again later/i,
   };
 
   const timings = {
@@ -488,17 +488,24 @@ const ZSProvider = (() => {
     return out;
   }
 
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
   function setTextareaValue(el, v) {
     const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
     const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
     if (setter && setter.set) setter.set.call(el, v);
     else el.value = v;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+    try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { el.dispatchEvent(new Event("input", { bubbles: true })); }
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
     if (ed.tagName === "TEXTAREA") {
       setTextareaValue(ed, text);
       return;
@@ -514,6 +521,20 @@ const ZSProvider = (() => {
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
     }
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      ed.textContent = String(text);
+      try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+      catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
   }
 
   async function typeAndSend(text, images) {
@@ -528,7 +549,7 @@ const ZSProvider = (() => {
     const isBtnReady = (b) => !!b && !b.disabled && b.getAttribute("aria-disabled") !== "true";
     const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      if (editorText() !== text) await setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       if (images && images.length) {
         try { await attachImages(images); } catch {}
       }
@@ -604,6 +625,59 @@ const ZSProvider = (() => {
     return true;
   }
 
+  const INTERFERING_TOOL_RE = /grounding with google search|url context/i;
+
+  function activeInterferingTools() {
+    const found = [];
+    const scope = barAnchor() || composerFrame();
+    if (scope && scope.querySelectorAll) {
+      for (const el of scope.querySelectorAll("button, [role='listitem'], [class*='chip'], [class*='tool']")) {
+        if (el.closest("#zs-root") || isInTurn(el)) continue;
+        const txt = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!txt || txt.length > 80 || !INTERFERING_TOOL_RE.test(txt)) continue;
+        const closeBtn = el.tagName === "BUTTON"
+          ? el
+          : (el.querySelector("button[aria-label*='remove' i], button[aria-label*='close' i], button[aria-label*='disable' i], button:last-of-type") || null);
+        if (closeBtn && !found.some((f) => f.el === closeBtn)) {
+          found.push({ label: txt, el: closeBtn, kind: "chip" });
+        }
+      }
+    }
+    for (const sw of document.querySelectorAll('[role="switch"][aria-checked="true"], mat-slide-toggle button[aria-checked="true"], mat-slide-toggle input[type="checkbox"]:checked')) {
+      if (sw.closest("#zs-root") || isInTurn(sw)) continue;
+      const row = sw.closest("div, section, li, mat-slide-toggle") || sw.parentElement;
+      const label = ((row && row.textContent) || sw.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+      if (INTERFERING_TOOL_RE.test(label) && !found.some((f) => f.el === sw)) {
+        found.push({ label: label.slice(0, 60), el: sw, kind: "toggle" });
+      }
+    }
+    return found;
+  }
+
+  async function disableInterferingTools() {
+    const items = activeInterferingTools();
+    if (!items.length) return 0;
+    let cleared = 0;
+    for (const it of items) {
+      try {
+        it.el.click();
+        cleared++;
+      } catch {}
+    }
+    if (cleared) {
+      diag("aistudio.toolsCleared", { count: cleared, labels: items.map((x) => x.label) });
+      await sleep(150);
+    }
+    return cleared;
+  }
+
+  function bootErrorHint(text) {
+    if (/internal error|resource exhausted|quota/i.test(text || "")) {
+      return "Tip: In Google AI Studio, turn off Grounding with Google Search & URL context in the composer/Tools sidebar, or switch models (e.g. Gemini 2.5 Pro/Flash), then click Start again.";
+    }
+    return "";
+  }
+
   function enforceComposer() { return { ready: !isBuildMode() }; }
   async function ensureComposerReady(reason) {
     if (isBuildMode()) {
@@ -614,6 +688,7 @@ const ZSProvider = (() => {
       };
     }
     if (!getEditor()) await waitFor(() => !!getEditor(), 1500);
+    await disableInterferingTools();
     const ed = getEditor();
     diag("mode_ready", { reason, provider: "aistudio", hasEditor: !!ed });
     return {
@@ -776,7 +851,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-22_v1.7.2"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-aistudio-ver", "2026-11-25_v1.9.1"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,
@@ -786,6 +861,7 @@ const ZSProvider = (() => {
     isGenerating, isBusyNow, isHardGenerating,
     enforceComposer, ensureComposerReady, modeWarning,
     modeSwitchLabel: "↗ Open Chat", switchToSupportedMode,
+    activeInterferingTools, disableInterferingTools, bootErrorHint,
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     attachImages, clearAttachments, openNewChat, conversationKey,

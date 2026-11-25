@@ -266,7 +266,34 @@ const ZSProvider = (() => {
     }
     return null;
   }
-  const sendButton = () => firstVisible(S.sendSels);
+  const NON_SEND_BTN_RE = /\b(?:stop|arr[êe]t|interrompre|cancel|attach|upload|file|image|photo|add|plus|mic|voice|audio|model|style|search|research|menu|close|dismiss|toggle)\b/i;
+  function sendButton() {
+    const ed = getEditor();
+    const scope = barAnchor() || composerFrame() || (ed && ed.parentElement);
+    for (const sel of S.sendSels) {
+      if (scope && scope.querySelectorAll) {
+        for (const b of scope.querySelectorAll(sel)) {
+          if (isVisibleBox(b) && !S.stopSels.some((ex) => b.matches(ex))) return b;
+        }
+      }
+      for (const b of document.querySelectorAll(sel)) {
+        if (isVisibleBox(b) && !S.stopSels.some((ex) => b.matches(ex))) return b;
+      }
+    }
+    if (!scope || !scope.querySelectorAll) return null;
+    let best = null, bestRight = -Infinity;
+    for (const b of scope.querySelectorAll("button")) {
+      if (!isVisibleBox(b) || b.disabled || b.getAttribute("aria-disabled") === "true") continue;
+      if (S.stopSels.some((ex) => b.matches(ex))) continue;
+      const sig = `${b.getAttribute("aria-label") || ""} ${b.getAttribute("data-testid") || ""} ${b.textContent || ""}`.trim();
+      if (NON_SEND_BTN_RE.test(sig)) continue;
+      if (!b.querySelector("svg")) continue;
+      const r = b.getBoundingClientRect ? b.getBoundingClientRect() : null;
+      const right = r ? r.right : 0;
+      if (right >= bestRight) { bestRight = right; best = b; }
+    }
+    return best;
+  }
   const stopButton = () => firstVisible(S.stopSels);
   const isStreamingAttr = () => !!document.querySelector('[data-is-streaming="true"]');
 
@@ -365,16 +392,24 @@ const ZSProvider = (() => {
     return out;
   }
 
+  const sameText = (a, b) => String(a || "").replace(/\s+/g, "") === String(b || "").replace(/\s+/g, "");
+
   function setTextareaValue(el, v) {
     const proto = window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype;
     const setter = proto && Object.getOwnPropertyDescriptor(proto, "value");
     if (setter && setter.set) setter.set.call(el, v);
     else el.value = v;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+    try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { el.dispatchEvent(new Event("input", { bubbles: true })); }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function setEditorText(ed, text) {
     ed.focus();
+    if (document.activeElement !== ed) {
+      await sleep(20);
+      ed.focus();
+    }
     if (ed.tagName === "TEXTAREA") {
       setTextareaValue(ed, text);
       return;
@@ -390,6 +425,20 @@ const ZSProvider = (() => {
       if (i < lines.length - 1) document.execCommand("insertLineBreak");
       if (i && i % INSERT_CHUNK_LINES === 0) await sleep(0);
     }
+    try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+    catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", String(text));
+        ed.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      } catch {}
+    }
+    if ((ed.textContent || "").trim() === "" && String(text).trim() !== "") {
+      ed.textContent = String(text);
+      try { ed.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" })); }
+      catch { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
   }
 
   async function typeAndSend(text, images) {
@@ -401,14 +450,27 @@ const ZSProvider = (() => {
       if (ed.tagName === "TEXTAREA") ed.removeAttribute("readonly");
       else ed.setAttribute("contenteditable", ed.dataset.zsPrevCe || "true");
     }
+    const wasSent = () => editorText().trim() === "" || !!stopButton();
     try {
-      if (editorText() !== text) await setEditorText(ed, text);
+      if (!sameText(editorText(), text)) await setEditorText(ed, text);
       if (images && images.length) {
         try { await attachImages(images); } catch {}
       }
       await waitFor(() => { const b = sendButton(); return !!b && !b.disabled; }, 3500);
       const btn = sendButton();
-      if (btn && !btn.disabled) { btn.click(); return; }
+      if (btn && !btn.disabled) {
+        try { btn.focus(); } catch {}
+        btn.click();
+        if (await waitFor(wasSent, 450)) return;
+        const btn2 = sendButton();
+        if (btn2 && !btn2.disabled) {
+          for (const ev of ["pointerdown", "mousedown", "mouseup", "click"]) {
+            btn2.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+          }
+          if (await waitFor(wasSent, 300)) return;
+        }
+      }
+      ed.focus();
       const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
       ed.dispatchEvent(new KeyboardEvent("keydown", o));
       ed.dispatchEvent(new KeyboardEvent("keyup", o));
@@ -518,7 +580,7 @@ const ZSProvider = (() => {
       const b = e.target && e.target.closest && e.target.closest("button");
       if (!b) return;
       if (S.stopSels.some((sel) => b.matches(sel))) { handlers.onNativeStop(); return; }
-      if (!S.sendSels.some((sel) => b.matches(sel))) return;
+      if (!S.sendSels.some((sel) => b.matches(sel)) && b !== sendButton()) return;
       if (b.disabled) return;
       if (handlers.isBlocked()) return;
       if (!handlers.isStarted()) {
@@ -565,7 +627,7 @@ const ZSProvider = (() => {
     reliableCounts: true,
     init({ diag: d } = {}) {
       if (d) diag = d;
-      try { document.documentElement.setAttribute("data-zs-claude-ver", "2026-11-22_v1.7.0"); } catch {}
+      try { document.documentElement.setAttribute("data-zs-claude-ver", "2026-11-25_v1.9.1"); } catch {}
     },
     allItems, isUserItem, isAssistantItem, itemText, classifyText,
     assistantCount, userCount, lastAssistant, lastAssistantId, readAssistant,

@@ -142,8 +142,15 @@ html.zs-light #zs-bar.zs-bar-anchored {
    inside it. */
 [class*="composer-surface"]:has(> #zs-bar.zs-prov-chatgpt) { padding-bottom: 12px; }
 
+#zs-bar,
+#zs-bar button,
+#zs-bar a {
+  pointer-events: auto;
+}
+
 /* Meta AI / anchored composer cards carry large border radii, so inset both ends cleanly. */
 #zs-bar.zs-bar-anchored.zs-prov-meta { padding-left: 30px; padding-right: 30px; }
+#zs-bar.zs-bar-anchored.zs-prov-gemini,
 #zs-bar.zs-bar-anchored.zs-prov-chatgpt,
 #zs-bar.zs-bar-anchored.zs-prov-claude,
 #zs-bar.zs-bar-anchored.zs-prov-grok,

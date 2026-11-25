@@ -2,6 +2,24 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.9.1] - 2026-11-25
+
+### Fixed
+- **Start Button & Session Startup Reliability Across All 12 AI Providers (`zeroscript-extension/core/main.js`, `overlay.css`):**
+  - Added `type="button"` to all injected `#zs-bar`, `#zs-menu`, `#zs-setup`, `#zs-unstable`, and banner `<button>` elements (plus `preventDefault()` / `stopPropagation()` on `#zs-action` and `#zs-stop`) so host `<form>` / `<fieldset>` submit handlers can no longer hijack Start clicks.
+  - Fixed `startSession()` falsely marking failed startups as `"Agent active"` when sending failed, returned `"empty"` / `"timeout"` / `"context_limit"`, or the provider returned a transient/internal error (`isBusyMsg`). Delayed `P.setInputLock(true)` until after `submitAndGetBase(prompt)` dispatches so cold-start contenteditable composers aren't locked before prompt injection, and surfaced mid-loop provider errors cleanly.
+  - Added explicit provider `id` matching in `AI_SITES` and `openNewChat()` implementations across all 12 providers (`gemini.js`, `aistudio.js`, `claude.js`, `grok.js`, `mistral.js`, `kimi.js`, `deepseek.js`, `glm.js`, `qwen.js`, `arena.js`, `meta.js`, `chatgpt.js`).
+- **Gemini (`zeroscript-extension/providers/gemini.js`):**
+  - Replaced fragile in-flow Angular `<fieldset>` `barMount()` with safe `#zs-root` `barAnchor()` so Angular reconciliation never detaches `#zs-bar` or swallows Start clicks.
+  - Expanded `getEditor()`, `sendButton()`, `stopButton()`, and `installSendHooks()` to match modern Gemini composers (`send` / `arrow_upward` icons, `.send-button`, `aria-label` fallbacks, composer-scoped rightmost button) and track `_lockedEl`.
+  - Fixed multi-line `editorText()` whitespace comparison, post-unlock focus timing, `InputEvent` dispatch, and `ClipboardEvent("paste")` fallback.
+- **Google AI Studio (`zeroscript-extension/providers/aistudio.js`):**
+  - Added automatic detection and cleanup of interfering composer chips / sidebar toggles (`Grounding with Google Search`, `URL context`) at startup (`disableInterferingTools()`) plus `bootErrorHint()` and expanded `RE.busy` detection for `"An internal error has occurred."`.
+- **Claude, Grok, Mistral, Kimi & Others (`claude.js`, `grok.js`, `mistral.js`, `kimi.js`, `glm.js`, `arena.js`, `core/config.js`):**
+  - Added composer-scoped positional `sendButton()` fallbacks on Claude and Grok (preventing Grok from clicking non-composer `button[type="submit"]` controls).
+  - Fixed `grok.js` `isUserItem()` misclassifying plain-text assistant replies as user turns.
+  - Unified whitespace-normalized `sameText()` retry checks, `InputEvent` + paste fallbacks, and trimmed verbose Turn 1 prompt boilerplate in `core/config.js`.
+
 ## [1.9.0] - 2026-11-25
 
 ### Added

@@ -362,7 +362,7 @@ const ZSProvider = (() => {
       if (Date.now() - lastNudge > 700) {
         lastNudge = Date.now();
         // Re-assert the value (a heavy re-render can drop it) and re-fire input.
-        if (editorText() !== text) setTextareaValue(editor, text);
+        if (editorText().replace(/\s+/g, "") !== text.replace(/\s+/g, "")) setTextareaValue(editor, text);
         else editor.dispatchEvent(new Event("input", { bubbles: true }));
       }
       return false;
@@ -460,6 +460,20 @@ const ZSProvider = (() => {
         if (rm) try { rm.click(); } catch {}
       });
     } catch {}
+  }
+
+  async function openNewChat() {
+    for (const sel of ['a[href="/"]', 'button#new-chat-button', '[class*="new-chat"]', 'button[aria-label*="New" i]']) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!el.closest("#zs-root") && el.offsetParent !== null) {
+          try { el.click(); } catch {}
+          await waitFor(() => chatIsEmpty() && !!getEditor(), 5000);
+          return true;
+        }
+      }
+    }
+    location.assign("https://chat.z.ai/");
+    return true;
   }
 
   // /c/<uuid> = a real conversation. "/" = a fresh chat with no id yet → ""
@@ -606,7 +620,7 @@ const ZSProvider = (() => {
     turnHalted, findContinueBtn, clickContinueBtn,
     scanError, isTooLongMsg, isBusyMsg,
     // actions
-    attachImages, clearAttachments, conversationKey,
+    attachImages, clearAttachments, openNewChat, conversationKey,
     installSendHooks, findToolBlockSpot,
   };
 })();
