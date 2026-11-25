@@ -81,8 +81,15 @@ Go to https://claude.ai, https://chat.deepseek.com, https://chatgpt.com, https:/
 - Generate meshes, materials, and models
 - Browse and insert from the Creator Store
 - Control play-testing
-- **Apply 13 specialized AAA Agent Skills** — built-in playbooks for **1:1 Game Recreation**, **AAA Animations & Motor6D Procedural Motion**, **Movement/Parkour & Camera Feel**, **1:1 Map Design & Biomes**, UI & HUD Craftsmanship, 3D Building & Architecture, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture/Networking/DataStore, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
-- **Remember your project across sessions** persistent project memory saved inside your place
+- **Apply 17 specialized AAA Agent Skills** — built-in playbooks for **1:1 Game Recreation**, **AAA Animations & Motor6D Procedural Motion**, **Creature Gaits, Facial Rigs & State Machines**, **Movement/Parkour & Camera Feel**, **1:1 Map Design & Biomes**, **Zero-Trust Security, DataStores & Trading**, **Pets, Quests & Lobbies**, **1:1 Reference UI, Mobile & Gamepad UX**, UI & HUD Craftsmanship, 3D Building & Architecture, Cutscenes & Camera Choreography, Combat & VFX, Luau Architecture & Networking, NPC AI/Bosses, Lighting & Spatial Audio, Economy & Shops, and Performance Optimization (plus 1-click preset packs and custom `.md` skills)
+- **Built-in 60-Gate Luau Auditor, 19 Starter Modules, 12-Genre Style Guide & Local Project Memory** — AIs can automatically route playbooks (`route_skills`), scan scripts (`audit_luau`), pull reusable security/UI/animation modules (`get_luau_module`), inspect 12 genre design tokens (`get_style_guide`), diagnose Roblox bugs (`diagnose_bug`), and persist architecture facts (`memory_read` / `memory_write`), all also available interactively in the Desktop App's **Toolkit** tab
+
+## New in 1.9.0
+
+- **60-Gate Pure-Python Luau Static Auditor (`audit_luau`).** Scans individual Luau scripts or full local folders for Remote security gaps, `UpdateAsync` yield bugs, `RBXScriptConnection` leaks, division by zero, nil receivers, and circular `require()` dependencies — directly from the Desktop App **Toolkit** tab or automatically via any connected AI.
+- **19 Battle-Tested Luau Starter Modules (`luau_modules/`).** Ready-to-use `TokenBucket`, `AttackWindow`, `RevisionTrade`, `RevisionGate`, `Finite`, `CriticalSpring`, `ModalTransition`, `HealthBinding`, `ViewportFit`, `StudioProbe`, and more via `list_luau_modules` / `get_luau_module` and in-app preview.
+- **4 New AAA Playbooks (17 Total) + Presets.** Added **Zero-Trust Security, DataStores & Trading**, **Pets, Quests, Dialogue & Matchmaking Lobbies**, **1:1 Reference UI, Mobile & Gamepad UX**, and **Creature Gaits, Facial Rigs & Anim State Machines**, plus **Security, Data & LiveOps** and **1:1 UI, Mobile & Polish** preset packs.
+- **Smart Skill Router, 12-Genre Style Vocab, Bug Recovery & Local Project Memory.** Interactive task router, 12-genre anti-slop style guide, 12 *Symptom → Probe → Repair → Retest* bug guides, 53 API gotchas, and local secret-filtered architecture memory ledger.
 
 ## New in 1.8.0
 

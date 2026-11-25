@@ -24,3 +24,4 @@ Use this playbook whenever building character controllers, movement tech (dash, 
 - **Over-the-Shoulder / Shift-Lock Combat Camera:** Offset camera smoothly (`CFrame.new(1.8, 0.4, 0)`), clamp pitch `[-70°, 75°]`, and run a spherecast/raycast wall-clip check so the camera never clips inside walls.
 - **Target Lock-On:** Find nearest visible enemy in cone, smoothly slerp camera look toward midpoint `(playerPos + targetPos * 0.65)`, and display a world-space `BillboardGui` reticle that scales on lock.
 - **Trauma Shake & Recoil:** Use squared trauma (`shake = trauma^2`) with smooth decay (`trauma = math.max(0, trauma - dt * 2.4)`) so explosions, parries, and gunshots punch cleanly without motion sickness.
+

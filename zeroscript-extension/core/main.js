@@ -818,6 +818,25 @@
   // error on non-vision providers, so nothing needs to be predicted here.
   const ALWAYS_BLOCKED_TOOLS = new Set(["subagent"]);
   const VISION_TOOLS = new Set(["screen_capture"]);
+  const ZS_KIT_TOOLS = new Set([
+    "audit_luau",
+    "route_skills",
+    "list_luau_modules",
+    "get_luau_module",
+    "get_style_guide",
+    "diagnose_bug",
+    "memory_read",
+    "memory_write",
+  ]);
+  const ZS_VIRTUAL_TOOLS = new Set([
+    "list_commands",
+    "list_tools",
+    "list_mcp_servers",
+    "list_skills",
+    "read_skill",
+    "get_skill",
+    ...ZS_KIT_TOOLS,
+  ]);
   const bareToolName = (name) => (name && name.includes("/") ? name.split("/").pop() : name) || "";
   // Is `name` a tool we actually have? The bridge ADVERTISES names that may carry
   // a per-server prefix when two MCP servers expose the same tool (see
@@ -826,7 +845,9 @@
   // cannot re-add a prefix it never had. Compare bare-to-bare in BOTH directions.
   const bareKey = (n) => String(n || "").split("/").pop().split(".").pop();
   function knownTool(name) {
-    if (!name || !A.toolNames.size) return false;
+    if (!name) return false;
+    if (ZS_VIRTUAL_TOOLS.has(name) || ZS_VIRTUAL_TOOLS.has(bareToolName(name))) return true;
+    if (!A.toolNames.size) return false;
     if (A.toolNames.has(name) || A.toolNames.has(bareToolName(name))) return true;
     const b = bareKey(name);
     for (const t of A.toolNames) if (bareKey(t) === b) return true;
@@ -1034,6 +1055,13 @@
         return `ERROR in ${name}: ${(r && r.error) || `skill '${sid}' not found`}.${avail.length ? " Available skill IDs: " + avail.join(", ") : ""}`;
       }
       return `Output of '${name}':\n=== SKILL: ${r.skill.name} (${r.skill.id}) ===\n${r.skill.content || "(empty skill)"}`;
+    }
+    if (ZS_KIT_TOOLS.has(name)) {
+      const r = await bg({ type: "zs_kit", action: name, params: args || {} });
+      if (!r || !r.ok) {
+        return `ERROR in ${name}: ${(r && r.error) || "ZeroScript toolkit command failed"}`;
+      }
+      return `Output of '${name}':\n${r.text || "(ok)"}`;
     }
     if (A.toolNames.size && !A.toolNames.has(name)) {
       return ZS.FEEDBACK.unknownTool(name, [...A.toolNames]);

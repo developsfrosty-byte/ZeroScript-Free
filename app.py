@@ -33,6 +33,7 @@ if sys.stderr is None:
 
 import bridge  # noqa: E402
 import skills_manager  # noqa: E402
+import zeroscript_kit  # noqa: E402
 
 bridge.EMBEDDED_MODE = True
 
@@ -217,6 +218,15 @@ def _build_diagnostics_payload():
         "detail": f"{enabled_skills} active skill playbook(s) synced across {len(AI_PROVIDERS)} AI providers.",
     })
 
+    # 7. ZeroScript Toolkit summary
+    mods_count = len(zeroscript_kit.list_modules())
+    checks.append({
+        "id": "toolkit",
+        "title": "Luau 60-Gate Engine & Starter Modules",
+        "status": "ok" if mods_count > 0 else "warn",
+        "detail": f"{len(zeroscript_kit.GATES)} static gates, {mods_count} Luau modules, 12 genre style guides & {len(zeroscript_kit.memory_list())} memory record(s) ready.",
+    })
+
     return {
         "ok": True,
         "ts": time.strftime("%H:%M:%S"),
@@ -275,12 +285,20 @@ def _build_status_payload(force_probe=False):
         "presets": skills_manager.list_presets(),
         "starterPrompts": skills_manager.BUILTIN_STARTER_PROMPTS,
         "activityStats": bridge.get_activity().get("stats", {}),
+        "toolkit": {
+            "gates": len(zeroscript_kit.GATES),
+            "modules": len(zeroscript_kit.list_modules()),
+            "genres": 12,
+            "recovery": 12,
+            "memoryCount": len(zeroscript_kit.memory_list()),
+        },
         "providers": AI_PROVIDERS,
         "settings": skills_manager.load_settings(),
         "paths": {
             "root": HERE,
             "extension": EXT_DIR,
             "skills": skills_manager.SKILLS_DIR,
+            "modules": os.path.join(HERE, "luau_modules"),
             "logs": bridge.LOGS_DIR,
         },
         "trayAvailable": HAS_PYQT6,
@@ -334,6 +352,7 @@ def open_app_window(url):
 def _open_folder(which):
     mapping = {
         "skills": skills_manager.SKILLS_DIR,
+        "modules": os.path.join(HERE, "luau_modules"),
         "logs": bridge.LOGS_DIR,
         "extension": EXT_DIR,
         "root": HERE,
@@ -446,6 +465,39 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/diagnostics":
             return self._send_json(200, _build_diagnostics_payload())
 
+        if path == "/api/toolkit/summary":
+            sg = zeroscript_kit.get_style_guide()
+            bug = zeroscript_kit.diagnose_bug("")
+            return self._send_json(200, {
+                "ok": True,
+                "gates": zeroscript_kit.list_gates(),
+                "demoLuau": zeroscript_kit.DEMO_BUGGY_LUAU,
+                "modules": zeroscript_kit.list_modules(include_code=True),
+                "styles": sg.get("vocabulary") or {},
+                "genres": sg.get("genres") or [],
+                "antiSlop": sg.get("antiSlop") or "",
+                "recovery": bug.get("recovery") or [],
+                "apiNotes": bug.get("apiNotes") or [],
+                "memory": zeroscript_kit.memory_list(include_superseded=False),
+            })
+
+        if path == "/api/toolkit/modules":
+            qs = urlparse(self.path).query
+            mid = ""
+            for part in qs.split("&"):
+                if part.startswith("id="):
+                    mid = part[3:]
+                    break
+            if mid:
+                m = zeroscript_kit.get_module(mid)
+                if not m:
+                    return self._send_json(404, {"ok": False, "error": f"module '{mid}' not found"})
+                return self._send_json(200, {"ok": True, "module": m})
+            return self._send_json(200, {"ok": True, "modules": zeroscript_kit.list_modules(include_code=True)})
+
+        if path == "/api/toolkit/memory":
+            return self._send_json(200, {"ok": True, "records": zeroscript_kit.memory_list(include_superseded=False)})
+
         return self._send_json(404, {"ok": False, "error": f"unknown route: {path}"})
 
     def do_POST(self):
@@ -537,6 +589,50 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if path == "/api/activity/clear":
             return self._send_json(200, {"ok": True, **bridge.clear_activity()})
+
+        if path == "/api/toolkit/audit":
+            directory = (body.get("directory") or "").strip()
+            if directory:
+                res = zeroscript_kit.audit_directory(directory)
+            else:
+                res = zeroscript_kit.audit_code(
+                    body.get("code") or "",
+                    filename=body.get("filename") or "Script.luau",
+                    context=body.get("context") or "unknown",
+                )
+            code_num = 200 if res.get("ok") else 400
+            return self._send_json(code_num, res)
+
+        if path == "/api/toolkit/route":
+            res = zeroscript_kit.route_skills(body.get("query") or "", limit=body.get("limit") or 4)
+            return self._send_json(200 if res.get("ok") else 400, res)
+
+        if path == "/api/toolkit/module":
+            m = zeroscript_kit.get_module(body.get("id") or body.get("module_id") or "")
+            if not m:
+                return self._send_json(404, {"ok": False, "error": "module not found"})
+            return self._send_json(200, {"ok": True, "module": m})
+
+        if path == "/api/toolkit/memory/save":
+            ok, entry_or_err = zeroscript_kit.memory_put(
+                key=body.get("key"),
+                value=body.get("value"),
+                kind=body.get("kind") or "decision",
+                project=body.get("project") or "default",
+                state=body.get("state") or "observed",
+            )
+            if not ok:
+                return self._send_json(400, {"ok": False, "error": str(entry_or_err)})
+            return self._send_json(200, {"ok": True, "record": entry_or_err, "records": zeroscript_kit.memory_list()})
+
+        if path == "/api/toolkit/memory/delete":
+            if body.get("clear"):
+                zeroscript_kit.memory_clear()
+                return self._send_json(200, {"ok": True, "records": []})
+            ok, err = zeroscript_kit.memory_delete(body.get("id"))
+            if not ok:
+                return self._send_json(404, {"ok": False, "error": err})
+            return self._send_json(200, {"ok": True, "records": zeroscript_kit.memory_list()})
 
         if path == "/api/prompts/save":
             ok, res = skills_manager.save_custom_prompt(body)

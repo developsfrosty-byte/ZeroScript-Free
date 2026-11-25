@@ -62,3 +62,4 @@ Every attack, cast, dash, or interaction MUST follow 4 distinct timing beats (ne
 - When rigging custom weapons, tools, chests, doors, or bosses: weld/joint with `Motor6D` (`Part0` = parent/hand, `Part1` = weapon/limb, `C0` = pivot offset on `Part0`, `C1` = pivot offset on `Part1`), disable `CanCollide` and `Anchored = false` on animated child parts (only root/base anchored if static prop).
 - For foot planting, reaching, or aiming arms at live targets on R15 rigs, attach an `IKControl` (`Type = Enum.IKControlType.Position` or `Transform`, `ChainRoot`, `EndEffector`, `Target`, `Weight`, `SmoothTime = 0.08`).
 - **FPS Viewmodels:** Clone lightweight arms + weapon model under `workspace.CurrentCamera`, update root `CFrame = camera.CFrame * swayOffset * walkBob * recoilSpring * adsLerp` in `RenderStepped`, and drive reload/inspect keyframes cleanly on the viewmodel `Animator`.
+

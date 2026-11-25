@@ -36,3 +36,4 @@ Always scaffold a real, complete multi-script architecture using `multi_edit`:
 ## 4. Mandatory 1:1 Visual & Playtest Verification Gate
 1. Call `screen_capture` on the built map & HUD in Edit mode to verify lighting, scale, colors, and UI alignment (fix any overlap or flat lighting immediately).
 2. Run `start_stop_play {"is_start": true}`, test core inputs or inspect live state via `###LUA:Server###` / `###LUA:Client###`, check `get_console_output` for **zero runtime errors/warnings**, then stop playtesting cleanly (`start_stop_play {"is_start": false}`).
+

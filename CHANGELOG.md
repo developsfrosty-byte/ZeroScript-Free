@@ -2,6 +2,28 @@
 
 All notable changes to ZeroScript Free are documented here.
 
+## [1.9.0] - 2026-11-25
+
+### Added
+- **60-Gate Pure-Python Luau Static Auditor (`zeroscript_kit/luau_audit.py` + `luau_roblox.py` / `luau_rules.py` / `luau_semantic.py`):**
+  - Integrated zero-dependency static Luau security, DataStore retry safety, execution context, memory-leak (`RBXScriptConnection` / `task.delay`), nil-receiver, division-by-zero, shadowed/unused local, and cross-file `require()` cycle/boundary inspection across 60 gates (`G01`–`G60`).
+  - Exposed to every connected AI via `audit_luau` and interactively in the new Desktop App **Toolkit → Luau Auditor** tab (single-script paste, full Rojo/local folder scanning, sample bugs loader, and 1-click AI Fix Prompt export).
+- **19 Battle-Tested Standalone Luau Starter Modules (`luau_modules/`):**
+  - Added `TokenBucket`, `AttackWindow`, `RevisionGate`, `RevisionTrade`, `Finite`, `RequestEpoch`, `ScopedRay`, `CriticalSpring`, `ModalTransition`, `HealthBinding`, `ViewportFit`, `BoundedPool`, `Formation`, `StableSelection`, `CleanupScope`, `WeightedChoice`, `RigMap`, `MaterialBinding`, and `StudioProbe`.
+  - Accessible to AIs via `list_luau_modules` / `get_luau_module` and browsable/previewable/copyable in **Toolkit → Luau Modules**.
+- **Smart Auto-Skill Router, 12-Genre Style Vocabulary, Anti-Slop Rubric & Bug Recovery (`intelligence_data/` + `zeroscript_kit/toolkit_data.py`):**
+  - Added `route_skills`, `get_style_guide` (12 Roblox genre vocabularies + anti-slop quality rubric), and `diagnose_bug` (12 structured *Symptom → Probe → Repair → Retest* recipes + 53 Roblox API gotchas) for all connected AIs and the **Toolkit → Style & Bug Guide** view.
+- **Local Project Memory Ledger (`project_memory.json`):**
+  - Added revision-tracked, secret-filtered architecture memory accessible by AIs (`memory_read` / `memory_write`) and editable in **Toolkit → Project Memory**.
+- **4 New Specialist AAA Playbooks (`skills/` + `skills_manager.py`, 17 Built-in Total):**
+  - **Zero-Trust Security, DataStores & Trading (`security-datastore-trading`)**
+  - **Pets, Quests, Dialogue & Matchmaking Lobbies (`pets-quests-lobbies`)**
+  - **1:1 Reference UI, Mobile & Gamepad UX (`ui-reference-accessibility`)**
+  - **Creature Gaits, Facial Rigs & Anim State Machines (`creatures-facial-state-machines`)**
+  - Added **Security, Data & LiveOps** and **1:1 UI, Mobile & Polish** preset packs plus 3 matching starter prompts.
+- **Desktop App Upgrades (`app.py` + `app_ui/`):**
+  - Added full **Toolkit** navigation view with 4 subtabs, System Health Doctor check #7, updated `Ctrl+K` Command Palette entries, and Home Overview quick card.
+
 ## [1.8.0] - 2026-11-23
 
 ### Added

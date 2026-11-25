@@ -14,6 +14,19 @@
     skillFilter: "All",
     provFilter: "All",
     actFilter: "all",
+    tkLoaded: false,
+    auditMode: "code",
+    lastAudit: null,
+    modules: [],
+    modFilter: "All",
+    activeModule: null,
+    styles: {},
+    genres: [],
+    selectedGenre: "classic",
+    antiSlop: "",
+    recovery: [],
+    memory: [],
+    lastRoute: null,
     editingId: null,
     motion: true,
     accent: "indigo",
@@ -180,7 +193,8 @@
   const VIEW_META = {
     home: { eyebrow: "— HOME", sub: "Bridge online. Pick an AI, equip playbooks, build." },
     activity: { eyebrow: "— ACTIVITY", sub: "Real-time inspector for every MCP tool call executed by your AIs." },
-    environment: { eyebrow: "— SKILLS", sub: "13 AAA Roblox Studio playbooks for 1:1 cloning, animations, UI, combat & more." },
+    environment: { eyebrow: "— SKILLS", sub: "17 AAA Roblox Studio playbooks for 1:1 cloning, animations, security, UI, combat & more." },
+    toolkit: { eyebrow: "— TOOLKIT", sub: "60-gate static Luau Auditor, 19 starter Luau modules, 12-genre style tokens & project memory." },
     prompts: { eyebrow: "— PROMPTS", sub: "Global instructions synced across all 12 AIs plus reusable developer templates." },
     connections: { eyebrow: "— CONNECTIONS", sub: "Health Doctor diagnostics, MCP processes, and live Studio command browser." },
     settings: { eyebrow: "— SETTINGS", sub: "Personalize Liquid Glass mode, scenic backdrop, accent theme, and tray behavior." },
@@ -195,11 +209,12 @@
       const name = (state.status && state.status.settings && state.status.settings.userName) || "Builder";
       $("#page-title").textContent = `${greetingPrefix()}, ${name}`;
     } else {
-      const titles = { environment: "Skills & Playbooks", connections: "Connections & Doctor", prompts: "Prompt Studio", activity: "Live Activity", settings: "Settings" };
+      const titles = { environment: "Skills & Playbooks", toolkit: "ZeroScript Toolkit", connections: "Connections & Doctor", prompts: "Prompt Studio", activity: "Live Activity", settings: "Settings" };
       $("#page-title").textContent = titles[view] || (view.charAt(0).toUpperCase() + view.slice(1));
     }
     $("#page-sub").textContent = meta.sub;
     if (view === "environment") loadSkills();
+    if (view === "toolkit") loadToolkitSummary();
     if (view === "activity") loadActivity();
     if (view === "connections" && !state.diagnostics) runDiagnostics();
   }
@@ -207,6 +222,11 @@
   function switchSubtab(name) {
     $$(".subtab").forEach((b) => b.classList.toggle("active", b.dataset.subtab === name));
     $$(".subpanel").forEach((p) => p.classList.toggle("active", p.id === `sub-${name}`));
+  }
+
+  function switchTkTab(name) {
+    $$(".tk-tab").forEach((b) => b.classList.toggle("active", b.dataset.tktab === name));
+    $$(".tk-panel").forEach((p) => p.classList.toggle("active", p.id === `tk-${name}`));
   }
 
   // ── Render Status & Views ─────────────────────────────────────────────
@@ -224,7 +244,7 @@
 
     applyTheme(settings);
 
-    $("#brand-ver").textContent = `V${br.version || "1.8.0"}`;
+    $("#brand-ver").textContent = `V${br.version || "1.9.0"}`;
     const name = settings.userName || "Builder";
     $("#profile-name").textContent = name;
     $("#profile-avatar").textContent = name.charAt(0).toUpperCase();
@@ -246,6 +266,7 @@
     if (s.paths) {
       $("#path-ext").textContent = s.paths.extension;
       $("#path-skills").textContent = s.paths.skills;
+      if ($("#path-modules") && s.paths.modules) $("#path-modules").textContent = s.paths.modules;
       $("#path-logs").textContent = s.paths.logs;
     }
 
@@ -306,6 +327,15 @@
     animateCount($("#kpi-skills-kpi"), enabledSkills);
     $("#kpi-skills-sub").textContent = `${(s.skills || []).length} total playbooks installed`;
     $("#quick-skills-sub").textContent = `${enabledSkills} active playbooks & ${(s.presets || []).length} preset packs`;
+    if (s.toolkit) {
+      const tk = s.toolkit;
+      if ($("#nav-toolkit-badge")) $("#nav-toolkit-badge").textContent = String(tk.gates || 60);
+      if ($("#tk-mod-count")) $("#tk-mod-count").textContent = String(tk.modules || 19);
+      if ($("#tk-mem-count")) $("#tk-mem-count").textContent = String(tk.memoryCount || 0);
+      if ($("#quick-toolkit-sub")) {
+        $("#quick-toolkit-sub").textContent = `${tk.gates || 60}-gate scanner, ${tk.modules || 19} modules & ${tk.memoryCount || 0} memory`;
+      }
+    }
 
     renderPinnedProviders(providers, settings.favoriteProviders || []);
     renderProviders(providers, settings.favoriteProviders || []);
@@ -652,7 +682,12 @@
     const out = [
       { title: "Go to Home Overview", sub: "Navigation", badge: "VIEW", run: () => { switchView("home"); switchSubtab("overview"); } },
       { title: "Go to Live Activity Inspector", sub: "Inspect MCP tool calls", badge: "VIEW", run: () => switchView("activity") },
-      { title: "Go to Skills & Presets", sub: "Manage 13 AAA AI playbooks", badge: "VIEW", run: () => switchView("environment") },
+      { title: "Go to Skills & Presets", sub: "Manage 17 AAA AI playbooks", badge: "VIEW", run: () => switchView("environment") },
+      { title: "Go to Toolkit (Luau Auditor, Modules & Memory)", sub: "60-gate analyzer, 19 Luau modules & style tokens", badge: "VIEW", run: () => switchView("toolkit") },
+      { title: "Toolkit: 60-Gate Luau Auditor", sub: "Scan any Luau script or Rojo folder", badge: "TOOLKIT", run: () => { switchView("toolkit"); switchTkTab("auditor"); } },
+      { title: "Toolkit: 19 Battle-Tested Luau Modules", sub: "TokenBucket, AttackWindow, CriticalSpring, StudioProbe...", badge: "TOOLKIT", run: () => { switchView("toolkit"); switchTkTab("modules"); } },
+      { title: "Toolkit: 12-Genre Style Vocab & Bug Guide", sub: "Style grammar, anti-slop & recovery recipes", badge: "TOOLKIT", run: () => { switchView("toolkit"); switchTkTab("guides"); } },
+      { title: "Toolkit: Local Project Memory Ledger", sub: "Shared architecture facts for all AIs", badge: "TOOLKIT", run: () => { switchView("toolkit"); switchTkTab("memory"); } },
       { title: "Go to Prompt Studio", sub: "Global instructions & starter prompts", badge: "VIEW", run: () => switchView("prompts") },
       { title: "Go to Connections & Health Doctor", sub: "MCP servers, commands & diagnostics", badge: "VIEW", run: () => { switchView("connections"); runDiagnostics(); } },
       { title: "Go to Settings & Liquid Glass", sub: "Liquid Glass mode, backdrops & themes", badge: "VIEW", run: () => switchView("settings") },
@@ -690,6 +725,14 @@
         sub: sk.category,
         badge: "SKILL",
         run: () => api("/api/skills/toggle", { id: sk.id, enabled: !sk.enabled }).then((r) => { if (r.ok) { state.skills = r.skills; renderSkills(); toast(`Updated ${sk.name}`); } }),
+      });
+    }
+    for (const m of (state.modules || [])) {
+      out.push({
+        title: `Inspect Luau Module: ${m.id}.luau`,
+        sub: `${m.category} · ${m.context}`,
+        badge: "MODULE",
+        run: () => { switchView("toolkit"); switchTkTab("modules"); openModuleModal(m); },
       });
     }
     return out;
@@ -735,6 +778,235 @@
     box.scrollTop = box.scrollHeight;
   }
 
+  // ── Toolkit (60-Gate Luau Auditor, 19 Modules, Styles & Memory) ─────
+  async function loadToolkitSummary(force = false) {
+    if (state.tkLoaded && !force) return;
+    try {
+      const res = await api("/api/toolkit/summary");
+      if (!res || !res.ok) return;
+      state.tkLoaded = true;
+      state.modules = res.modules || [];
+      state.styles = res.styles || {};
+      state.genres = res.genres || Object.keys(state.styles);
+      if (state.genres.length && !state.styles[state.selectedGenre]) {
+        state.selectedGenre = state.genres[0];
+      }
+      state.antiSlop = res.antiSlop || "";
+      state.recovery = res.recovery || [];
+      state.memory = res.memory || [];
+      state.demoLuau = res.demoLuau || "";
+
+      if ($("#audit-code-input") && !$("#audit-code-input").value.trim() && state.demoLuau) {
+        $("#audit-code-input").value = state.demoLuau;
+      }
+      if ($("#tk-mod-count")) $("#tk-mod-count").textContent = String(state.modules.length);
+      if ($("#tk-mem-count")) $("#tk-mem-count").textContent = String(state.memory.length);
+      if ($("#antislop-body")) $("#antislop-body").textContent = state.antiSlop;
+
+      renderModules();
+      renderStylePills();
+      renderStyleTokens();
+      renderRecoveryList();
+      renderMemoryList();
+    } catch {}
+  }
+
+  function setAuditMode(mode) {
+    state.auditMode = mode === "dir" ? "dir" : "code";
+    $$("[data-audit-mode]").forEach((b) => b.classList.toggle("active", b.dataset.auditMode === state.auditMode));
+    $("#audit-code-meta").hidden = state.auditMode === "dir";
+    $("#audit-code-wrap").hidden = state.auditMode === "dir";
+    $("#audit-dir-wrap").hidden = state.auditMode !== "dir";
+  }
+
+  async function runLuauAudit() {
+    const payload = state.auditMode === "dir"
+      ? { directory: ($("#audit-dir-input").value || "").trim() }
+      : {
+          code: $("#audit-code-input").value || "",
+          filename: ($("#audit-filename").value || "").trim() || "Script.luau",
+          context: $("#audit-context").value || "unknown",
+        };
+    toast("Running 60-gate Luau audit...");
+    const res = await api("/api/toolkit/audit", payload);
+    if (!res || !res.ok) {
+      toast((res && res.error) || "Audit failed");
+      return;
+    }
+    state.lastAudit = res;
+    renderAuditResult(res);
+    const sm = res.summary || {};
+    toast(`Audit complete: ${sm.status} (${sm.total || 0} findings)`);
+  }
+
+  function renderAuditResult(res) {
+    const sm = res.summary || {};
+    $("#aud-status").textContent = sm.status || "PASS";
+    $("#aud-mode-sub").textContent = res.filesScanned ? `${res.filesScanned} file(s) scanned` : `Mode: ${sm.mode || "default"}`;
+    animateCount($("#aud-high"), sm.high || 0);
+    animateCount($("#aud-med"), (sm.medium || 0) + (sm.low || 0));
+    animateCount($("#aud-gates"), (sm.gates_triggered || []).length);
+    $("#aud-lines-sub").textContent = `${sm.lines || 0} line(s) inspected`;
+
+    const list = $("#audit-findings-list");
+    const items = res.findings || [];
+    if (!items.length) {
+      list.innerHTML = `<div class="surface-card tk-card"><div class="sec-sub">✓ Clean! Zero findings triggered across all ${res.gateCount || 60} Aegis + Omni static gates.</div></div>`;
+      return;
+    }
+    list.innerHTML = items.map((f) => {
+      const p = f.priority || "medium";
+      const tagCls = p === "high" ? "red" : (p === "medium" ? "amber" : "green");
+      return `
+        <div class="finding-row prio-${esc(p)}">
+          <div class="finding-head">
+            <div class="finding-left">
+              <span class="tag ${tagCls}">${esc(p)} · ${esc(f.gate)}</span>
+              <span class="finding-code">${esc(f.code)}</span>
+            </div>
+            <span class="finding-loc">${esc(f.path)}:${f.line}</span>
+          </div>
+          <div class="finding-msg">${esc(f.message)}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderModules() {
+    const grid = $("#modules-grid");
+    if (!grid) return;
+    const cat = state.modFilter || "All";
+    const q = ($("#mod-search")?.value || "").trim().toLowerCase();
+    const list = (state.modules || []).filter((m) => {
+      if (cat !== "All" && (m.category || "").toLowerCase() !== cat.toLowerCase()) return false;
+      if (q && !`${m.id} ${m.category} ${m.context} ${m.summary}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    grid.innerHTML = list.map((m) => `
+      <div class="skill-card">
+        <div class="skill-top">
+          <span class="tag accent">${esc(m.category)}</span>
+          <span class="tag">${esc(m.context)} · ${m.lines}L</span>
+        </div>
+        <h3 class="skill-title">${esc(m.id)}.luau</h3>
+        <p class="skill-tagline">${esc(m.summary)}</p>
+        <div class="skill-controls">
+          <button class="btn-outline sm" data-preview-mod="${esc(m.id)}">PREVIEW</button>
+          <div class="toolbar-actions">
+            <button class="btn-outline sm" data-ai-mod="${esc(m.id)}" title="Copy AI prompt to fetch & wire this module">AI PROMPT</button>
+            <button class="btn-primary sm" data-copy-mod="${esc(m.id)}">COPY</button>
+          </div>
+        </div>
+      </div>
+    `).join("") || `<div class="sec-sub">No matching Luau modules found.</div>`;
+  }
+
+  function openModuleModal(mod) {
+    if (!mod) return;
+    state.activeModule = mod;
+    $("#mod-modal-eyebrow").textContent = `— ${String(mod.category || "LUAU MODULE").toUpperCase()} · ${String(mod.context || "SHARED").toUpperCase()}`;
+    $("#mod-modal-title").textContent = `${mod.id}.luau`;
+    $("#mod-modal-desc").textContent = mod.summary || "";
+    $("#mod-modal-example").textContent = mod.example || "-- Require this ModuleScript cleanly from ReplicatedStorage or ServerScriptService";
+    $("#mod-modal-code").textContent = mod.code || "";
+    $("#module-modal").hidden = false;
+  }
+
+  async function runSkillRouterPreview(e) {
+    if (e) e.preventDefault();
+    const q = ($("#router-query").value || "").trim();
+    if (!q) { toast("Enter a game task or feature first."); return; }
+    const res = await api("/api/toolkit/route", { query: q, limit: 4 });
+    if (!res || !res.ok) {
+      toast((res && res.error) || "Routing failed");
+      return;
+    }
+    state.lastRoute = res;
+    renderRouterResults(res);
+  }
+
+  function renderRouterResults(res) {
+    const box = $("#router-results");
+    if (!box || !res) return;
+    const skHtml = (res.skills || []).map((s) => `<span class="tag accent">${esc(s.id)} (${s.score})</span>`).join("");
+    const stHtml = (res.styles || []).map((g) => `<span class="tag green">${esc(g)}</span>`).join("");
+    const modHtml = (res.modules || []).map((m) => `<span class="tag">${esc(m.id)}.luau</span>`).join("");
+    box.innerHTML = `
+      <div class="router-chips"><span class="kpi-label">PLAYBOOKS:</span>${skHtml || '<span class="sec-sub">None</span>'}</div>
+      ${stHtml ? `<div class="router-chips"><span class="kpi-label">STYLES:</span>${stHtml}</div>` : ""}
+      ${modHtml ? `<div class="router-chips"><span class="kpi-label">MODULES:</span>${modHtml}</div>` : ""}
+    `;
+  }
+
+  function renderStylePills() {
+    const row = $("#style-genre-pills");
+    if (!row) return;
+    row.innerHTML = (state.genres || []).map((g) => `
+      <button type="button" class="filter-pill ${g === state.selectedGenre ? "active" : ""}" data-style-genre="${esc(g)}">${esc(g)}</button>
+    `).join("");
+  }
+
+  function renderStyleTokens() {
+    const grid = $("#style-tokens-grid");
+    if (!grid) return;
+    const tokens = (state.styles && state.styles[state.selectedGenre]) || {};
+    const entries = Object.entries(tokens);
+    grid.innerHTML = entries.map(([k, v]) => `
+      <div class="style-token">
+        <div class="style-token-k">${esc(k.replace(/_/g, " "))}</div>
+        <div class="style-token-v">${esc(v)}</div>
+      </div>
+    `).join("") || `<div class="sec-sub">No tokens loaded.</div>`;
+  }
+
+  function renderRecoveryList() {
+    const box = $("#recovery-list");
+    if (!box) return;
+    const q = ($("#recovery-search")?.value || "").trim().toLowerCase();
+    const list = (state.recovery || []).filter((r) => {
+      if (!q) return true;
+      return `${r.symptom} ${r.probe} ${r.repair} ${r.retest}`.toLowerCase().includes(q);
+    });
+    box.innerHTML = list.map((r, idx) => `
+      <div class="recovery-card">
+        <div class="recovery-head">
+          <div class="recovery-title">${esc(r.symptom)}</div>
+          <button type="button" class="btn-outline sm" data-copy-rec="${esc(r.symptom)}">DEBUG PROMPT</button>
+        </div>
+        <div class="recovery-step"><b>Probe:</b> ${esc(r.probe)}</div>
+        <div class="recovery-step"><b>Repair:</b> ${esc(r.repair)}</div>
+        <div class="recovery-step"><b>Retest:</b> ${esc(r.retest)}</div>
+      </div>
+    `).join("") || `<div class="sec-sub">No matching bug recovery recipes.</div>`;
+  }
+
+  function renderMemoryList() {
+    const box = $("#memory-list");
+    if (!box) return;
+    if ($("#tk-mem-count")) $("#tk-mem-count").textContent = String((state.memory || []).length);
+    const q = ($("#mem-search")?.value || "").trim().toLowerCase();
+    const list = (state.memory || []).filter((r) => {
+      if (!q) return true;
+      return `${r.project} ${r.kind} ${r.key} ${r.value}`.toLowerCase().includes(q);
+    });
+    box.innerHTML = list.map((r) => `
+      <div class="memory-row">
+        <div class="skill-top">
+          <div class="finding-left">
+            <span class="tag accent">${esc(r.project)}</span>
+            <span class="tag green">${esc(r.kind)} · rev ${r.revision}</span>
+            <span class="finding-code">${esc(r.key)}</span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="btn-outline sm" data-copy-mem="${esc(r.id)}">COPY</button>
+            <button type="button" class="btn-outline sm" data-del-mem="${esc(r.id)}">DEL</button>
+          </div>
+        </div>
+        <div class="memory-val">${esc(r.value)}</div>
+      </div>
+    `).join("") || `<div class="sec-sub">No architecture memory entries saved yet. Add one on the left, or let any AI save verified decisions via <code>memory_write</code>.</div>`;
+  }
+
   // ── Shared Actions ────────────────────────────────────────────────────
   async function refreshNow() {
     const btn = $("#btn-refresh-top");
@@ -768,7 +1040,113 @@
   $("#cta-browse-providers").addEventListener("click", () => { switchView("home"); switchSubtab("providers"); });
   $("#cta-open-skills").addEventListener("click", () => switchView("environment"));
   $("#quick-skills").addEventListener("click", () => switchView("environment"));
+  $("#quick-toolkit").addEventListener("click", () => switchView("toolkit"));
   $("#quick-prompts").addEventListener("click", () => switchView("prompts"));
+  $$(".tk-tab").forEach((b) => b.addEventListener("click", () => switchTkTab(b.dataset.tktab)));
+  $$("[data-audit-mode]").forEach((b) => b.addEventListener("click", () => setAuditMode(b.dataset.auditMode)));
+  $("#btn-run-audit").addEventListener("click", runLuauAudit);
+  $("#btn-audit-demo").addEventListener("click", () => {
+    setAuditMode("code");
+    $("#audit-filename").value = "CombatHandler.server.luau";
+    $("#audit-context").value = "server";
+    $("#audit-code-input").value = state.demoLuau || "";
+    runLuauAudit();
+  });
+  $("#btn-audit-clear").addEventListener("click", () => {
+    $("#audit-code-input").value = "";
+    $("#audit-dir-input").value = "";
+    state.lastAudit = null;
+    $("#aud-status").textContent = "READY";
+    $("#aud-high").textContent = "0";
+    $("#aud-med").textContent = "0";
+    $("#aud-gates").textContent = "0";
+    $("#aud-lines-sub").textContent = "0 lines inspected";
+    $("#audit-findings-list").innerHTML = `<div class="surface-card tk-card"><div class="sec-sub">Cleared. Paste a Luau script or folder path and run the 60-gate audit.</div></div>`;
+  });
+  $("#btn-audit-fix-prompt").addEventListener("click", () => {
+    const res = state.lastAudit;
+    if (!res || !(res.findings || []).length) {
+      toast("Run an audit with findings first.");
+      return;
+    }
+    const bullets = res.findings.slice(0, 20).map((f) => `- [${f.priority.toUpperCase()} ${f.gate}] line ${f.line} (${f.code}): ${f.message}`).join("\n");
+    const prompt = `Inspect and fix these ${res.findings.length} ZeroScript 60-Gate Luau Audit findings in ${res.filename} (${res.context} context), then re-run audit_luau to verify 0 findings remain:\n${bullets}`;
+    copyText(prompt, "Copied AI Fix Prompt!");
+  });
+
+  $$("#mod-filters .filter-pill").forEach((b) => {
+    b.addEventListener("click", () => {
+      $$("#mod-filters .filter-pill").forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      state.modFilter = b.dataset.mcat;
+      renderModules();
+    });
+  });
+  $("#mod-search").addEventListener("input", renderModules);
+  $("#mod-modal-close").addEventListener("click", () => { $("#module-modal").hidden = true; });
+  $("#mod-modal-done").addEventListener("click", () => { $("#module-modal").hidden = true; });
+  $("#mod-modal-copy").addEventListener("click", () => {
+    if (state.activeModule) copyText(state.activeModule.code || "", `Copied ${state.activeModule.id}.luau`);
+  });
+  $("#mod-modal-ai").addEventListener("click", () => {
+    if (!state.activeModule) return;
+    const m = state.activeModule;
+    copyText(`Call {"command": "get_luau_module", "params": {"module_id": "${m.id}"}} first, install it into our project cleanly (${m.context}), and wire it up.`, `Copied AI prompt for ${m.id}.luau`);
+  });
+
+  $("#router-form").addEventListener("submit", runSkillRouterPreview);
+  $("#btn-copy-routed-prompt").addEventListener("click", () => {
+    const r = state.lastRoute;
+    const q = ($("#router-query").value || "").trim();
+    if (!r || !(r.skills || []).length) { toast("Run Route Task first."); return; }
+    const skillsList = r.skills.map((s) => s.id).join(", ");
+    const modsList = (r.modules || []).map((m) => m.id).join(", ");
+    const stylesList = (r.styles || []).join(", ");
+    const prompt = `Read these ZeroScript playbooks first: ${skillsList}.${stylesList ? ` Call get_style_guide for: ${stylesList}.` : ""}${modsList ? ` Pull starter modules via get_luau_module: ${modsList}.` : ""}\n\nTask: ${q}`;
+    copyText(prompt, "Copied optimized AI prompt!");
+  });
+  $("#btn-copy-style-brief").addEventListener("click", () => {
+    const g = state.selectedGenre;
+    const tok = (state.styles && state.styles[g]) || {};
+    const text = `Follow ZeroScript's ${g.toUpperCase()} Style Grammar:\n` + Object.entries(tok).map(([k, v]) => `- ${k}: ${v}`).join("\n");
+    copyText(text, `Copied ${g} style brief!`);
+  });
+  $("#recovery-search").addEventListener("input", renderRecoveryList);
+
+  $("#memory-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const res = await api("/api/toolkit/memory/save", {
+      project: ($("#mem-project").value || "").trim() || "default",
+      key: $("#mem-key").value.trim(),
+      kind: $("#mem-kind").value,
+      state: $("#mem-state").value,
+      value: $("#mem-value").value.trim(),
+    });
+    const msg = $("#mem-form-msg");
+    if (res && res.ok) {
+      msg.classList.remove("err");
+      msg.textContent = `Saved rev ${res.record.revision}`;
+      $("#mem-key").value = "";
+      $("#mem-value").value = "";
+      state.memory = res.records || [];
+      renderMemoryList();
+      tick();
+      setTimeout(() => { msg.textContent = ""; }, 2500);
+    } else {
+      msg.classList.add("err");
+      msg.textContent = (res && res.error) || "Save failed";
+    }
+  });
+  $("#mem-search").addEventListener("input", renderMemoryList);
+  $("#btn-clear-memory").addEventListener("click", async () => {
+    const res = await api("/api/toolkit/memory/delete", { clear: true });
+    if (res && res.ok) {
+      state.memory = [];
+      renderMemoryList();
+      tick();
+      toast("Project memory cleared.");
+    }
+  });
   $("#quick-activity").addEventListener("click", () => switchView("activity"));
   $("#quick-connections").addEventListener("click", () => { switchView("connections"); runDiagnostics(); });
   $("#guide-diag").addEventListener("click", () => { switchView("connections"); runDiagnostics(); });
@@ -827,7 +1205,7 @@
       (_paletteActions[_paletteIndex] || _paletteActions[0]).run();
     }
   });
-  for (const bId of ["#cmd-palette", "#skill-modal", "#prompt-modal", "#logs-drawer"]) {
+  for (const bId of ["#cmd-palette", "#skill-modal", "#module-modal", "#prompt-modal", "#logs-drawer"]) {
     $(bId).addEventListener("click", (e) => {
       if (e.target === e.currentTarget) e.currentTarget.hidden = true;
     });
@@ -840,6 +1218,7 @@
     } else if (e.key === "Escape") {
       $("#cmd-palette").hidden = true;
       $("#skill-modal").hidden = true;
+      $("#module-modal").hidden = true;
       $("#prompt-modal").hidden = true;
       $("#logs-drawer").hidden = true;
     }
@@ -1003,6 +1382,59 @@
       if (res && res.ok && state.status) state.status.settings = res.settings;
       applyTheme({ accentTheme: state.accent, liquidGlass: state.liquidGlass, liquidBackdrop: state.backdrop, glassStyle, ambientMotion: state.motion });
       toast(`Glass style: ${glassStyle}`);
+      return;
+    }
+
+    const pMod = e.target.closest("[data-preview-mod]");
+    if (pMod) {
+      const m = (state.modules || []).find((x) => x.id === pMod.dataset.previewMod);
+      if (m) openModuleModal(m);
+      return;
+    }
+    const cMod = e.target.closest("[data-copy-mod]");
+    if (cMod) {
+      const m = (state.modules || []).find((x) => x.id === cMod.dataset.copyMod);
+      if (m) copyText(m.code || "", `Copied ${m.id}.luau`);
+      return;
+    }
+    const aiMod = e.target.closest("[data-ai-mod]");
+    if (aiMod) {
+      const m = (state.modules || []).find((x) => x.id === aiMod.dataset.aiMod);
+      if (m) copyText(`Call {"command": "get_luau_module", "params": {"module_id": "${m.id}"}} first, install it cleanly (${m.context}), and wire it into the project.`, `Copied AI prompt for ${m.id}.luau`);
+      return;
+    }
+
+    const sgBtn = e.target.closest("[data-style-genre]");
+    if (sgBtn) {
+      state.selectedGenre = sgBtn.dataset.styleGenre;
+      renderStylePills();
+      renderStyleTokens();
+      return;
+    }
+
+    const recBtn = e.target.closest("[data-copy-rec]");
+    if (recBtn) {
+      const sym = recBtn.dataset.copyRec;
+      copyText(`Call {"command": "diagnose_bug", "params": {"query": "${sym}"}} first, then follow Probe -> Repair -> Retest against our live Studio place.`, `Copied debug prompt for '${sym}'`);
+      return;
+    }
+
+    const cMem = e.target.closest("[data-copy-mem]");
+    if (cMem) {
+      const item = (state.memory || []).find((x) => x.id === cMem.dataset.copyMem);
+      if (item) copyText(`[${item.project}] (${item.kind}) ${item.key}: ${item.value}`, "Memory entry copied.");
+      return;
+    }
+    const dMem = e.target.closest("[data-del-mem]");
+    if (dMem) {
+      const res = await api("/api/toolkit/memory/delete", { id: dMem.dataset.delMem });
+      if (res && res.ok) {
+        state.memory = res.records || [];
+        renderMemoryList();
+        tick();
+        toast("Memory entry deleted.");
+      }
+      return;
     }
   });
 
@@ -1256,5 +1688,6 @@
   startPointerSheen();
   tick();
   loadSkills();
+  loadToolkitSummary();
   setInterval(tick, 2500);
 })();

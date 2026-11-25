@@ -29,6 +29,7 @@ import threading
 import time
 
 import skills_manager
+import zeroscript_kit
 
 try:
     # Sibling script (same folder as bridge.py, which Python puts on sys.path
@@ -77,7 +78,7 @@ def _enable_ansi_colors():
 HOST = "127.0.0.1"
 # Keep in sync with zeroscript-extension/manifest.json "version" - printed at
 # startup so a user's terminal output alone tells us which build they're on.
-BRIDGE_VERSION = "1.8.0"
+BRIDGE_VERSION = "1.9.0"
 PORT = int(os.environ.get("ZS_BRIDGE_PORT", "17613"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.json")
@@ -95,17 +96,18 @@ _activity_seq = 0
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
-def record_activity(name, args, res, elapsed_s):
+def record_activity(name, args, res, elapsed_s, server_override=None):
     """Record one completed MCP tool call for the Desktop App Activity view."""
     global _activity_seq
-    srv = "roblox"
-    try:
-        with mgr.index_lock:
-            entry = mgr.index.get(name)
-            if entry is not None and entry[0] is not None:
-                srv = entry[0].id
-    except Exception:
-        pass
+    srv = server_override or "roblox"
+    if not server_override:
+        try:
+            with mgr.index_lock:
+                entry = mgr.index.get(name)
+                if entry is not None and entry[0] is not None:
+                    srv = entry[0].id
+        except Exception:
+            pass
     try:
         arg_text = json.dumps(args or {}, ensure_ascii=False)
     except Exception:
@@ -1436,6 +1438,167 @@ def safe_call(name, arguments, timeout):
         return {"ok": False, "error": str(e), "kind": type(e).__name__}
 
 
+def handle_zs_kit(action, params):
+    """Execute built-in ZeroScript Toolkit commands (Luau Auditor, Modules, Style Guide, Memory, Router)."""
+    t0 = time.monotonic()
+    act = str(action or "").strip()
+    p = params if isinstance(params, dict) else {}
+    res = {"ok": False, "error": f"unknown toolkit action '{act}'"}
+    try:
+        if act == "audit_luau":
+            directory = p.get("directory") or p.get("path")
+            if directory and not p.get("code"):
+                out = zeroscript_kit.audit_directory(str(directory))
+            else:
+                code = p.get("code")
+                if not isinstance(code, str) or not code.strip():
+                    out = {"ok": False, "error": "'code' (string) or 'directory' parameter is required."}
+                else:
+                    out = zeroscript_kit.audit_code(
+                        code,
+                        filename=p.get("filename") or "Script.luau",
+                        context=p.get("context") or "unknown",
+                    )
+            if not out.get("ok"):
+                res = {"ok": False, "error": out.get("error") or "audit failed"}
+            else:
+                sm = out.get("summary") or {}
+                lines = [
+                    f"Luau 60-Gate Audit ({out.get('filename')}, context={out.get('context')}): "
+                    f"{sm.get('status')} | High={sm.get('high', 0)} Medium={sm.get('medium', 0)} Low={sm.get('low', 0)} "
+                    f"(Total={sm.get('total', 0)}, Mode={sm.get('mode', 'default')})"
+                ]
+                for f in (out.get("findings") or [])[:40]:
+                    lines.append(
+                        f"- [{f.get('priority','medium').upper()} {f.get('gate')}:{f.get('gate_name')}] "
+                        f"{f.get('path')}:{f.get('line')} ({f.get('code')}): {f.get('message')}"
+                    )
+                if len(out.get("findings") or []) > 40:
+                    lines.append(f"...and {len(out['findings']) - 40} more finding(s).")
+                if not out.get("findings"):
+                    lines.append("All 60 static gates passed cleanly.")
+                res = {"ok": True, "text": "\n".join(lines), "data": out}
+
+        elif act == "route_skills":
+            q = str(p.get("query") or p.get("task") or "").strip()
+            if not q:
+                res = {"ok": False, "error": "'query' parameter is required."}
+            else:
+                out = zeroscript_kit.route_skills(q, limit=p.get("limit") or 4)
+                if not out.get("ok"):
+                    res = {"ok": False, "error": out.get("error") or "routing failed"}
+                else:
+                    lines = [f"Recommended Playbooks for '{q}':"]
+                    for sk in out.get("skills") or []:
+                        lines.append(f"- {sk['id']} ({sk['name']}): {sk.get('tagline', '')} [matched: {', '.join(sk.get('matched', []))}]")
+                    if out.get("styles"):
+                        lines.append("Style genres: " + ", ".join(out["styles"]) + " (call get_style_guide to load tokens)")
+                    if out.get("modules"):
+                        lines.append("Starter Luau modules: " + ", ".join(m["id"] for m in out["modules"]) + " (call get_luau_module to inspect code)")
+                    if out.get("recovery"):
+                        lines.append("Relevant bug recipes: " + "; ".join(r["symptom"] for r in out["recovery"]))
+                    res = {"ok": True, "text": "\n".join(lines), "data": out}
+
+        elif act == "list_luau_modules":
+            mods = zeroscript_kit.list_modules(category=p.get("category"), include_code=False)
+            lines = [f"Built-in ZeroScript Luau Starter Modules ({len(mods)}):"]
+            for m in mods:
+                lines.append(f"- {m['id']} [{m['category']} | {m['context']}] ({m['lines']} lines): {m['summary']}")
+            lines.append('Call {"command": "get_luau_module", "params": {"module_id": "<name>"}} to get copy-ready source code.')
+            res = {"ok": True, "text": "\n".join(lines), "data": mods}
+
+        elif act == "get_luau_module":
+            mid = str(p.get("module_id") or p.get("id") or p.get("name") or "").strip()
+            if not mid:
+                avail = ", ".join(m["id"] for m in zeroscript_kit.list_modules())
+                res = {"ok": False, "error": f"'module_id' is required. Available modules: {avail}"}
+            else:
+                m = zeroscript_kit.get_module(mid)
+                if not m:
+                    avail = ", ".join(x["id"] for x in zeroscript_kit.list_modules())
+                    res = {"ok": False, "error": f"module '{mid}' not found. Available: {avail}"}
+                else:
+                    text = (
+                        f"=== LUAU MODULE: {m['id']}.luau ({m['category']} | {m['context']}) ===\n"
+                        f"{m['summary']}\n"
+                        + (f"\nUsage example:\n{m['example']}\n" if m.get("example") else "")
+                        + f"\n```luau\n{m.get('code', '').strip()}\n```"
+                    )
+                    res = {"ok": True, "text": text, "data": m}
+
+        elif act == "get_style_guide":
+            genre = str(p.get("genre") or "").strip() or None
+            out = zeroscript_kit.get_style_guide(genre)
+            if not out.get("ok"):
+                res = {"ok": False, "error": out.get("error") or "unknown genre"}
+            elif genre:
+                lines = [f"=== STYLE VOCABULARY: {out['genre'].upper()} ==="]
+                for k, v in (out.get("tokens") or {}).items():
+                    lines.append(f"- {k}: {v}")
+                lines.append("\n=== ANTI-SLOP RUBRIC ===\n" + (out.get("antiSlop") or ""))
+                res = {"ok": True, "text": "\n".join(lines), "data": out}
+            else:
+                lines = ["Available Roblox Style Genres (pass {\"genre\": \"<name>\"} for full 20 tokens):"]
+                vocab = out.get("vocabulary") or {}
+                for g, tok in vocab.items():
+                    lines.append(f"- {g}: {tok.get('geometry', '')} | Surface: {tok.get('surface', '')} | Reject: {tok.get('reject', '')}")
+                lines.append("\n=== ANTI-SLOP RUBRIC ===\n" + (out.get("antiSlop") or ""))
+                res = {"ok": True, "text": "\n".join(lines), "data": out}
+
+        elif act == "diagnose_bug":
+            q = str(p.get("query") or p.get("symptom") or "").strip()
+            out = zeroscript_kit.diagnose_bug(q)
+            lines = [f"ZeroScript Bug Recovery & API Guide{f' for: {q}' if q else ''}:"]
+            for r in out.get("recovery") or []:
+                lines.append(
+                    f"- SYMPTOM: {r.get('symptom')}\n"
+                    f"  Probe: {r.get('probe')}\n"
+                    f"  Repair: {r.get('repair')}\n"
+                    f"  Retest: {r.get('retest')}"
+                )
+            if out.get("apiNotes"):
+                lines.append("\nRelevant Roblox API Gotchas:")
+                for a in out["apiNotes"]:
+                    lines.append(f"- {a['service']}.{a['member']} ({a['context']}): {a['note']}")
+            res = {"ok": True, "text": "\n".join(lines), "data": out}
+
+        elif act == "memory_read":
+            q = str(p.get("query") or "").strip()
+            proj = str(p.get("project") or "").strip() or None
+            rows = zeroscript_kit.memory_search(q, project=proj, limit=p.get("limit") or 12)
+            if not rows:
+                res = {"ok": True, "text": "Local project memory is empty (no matching entries).", "data": []}
+            else:
+                lines = [f"Local Project Memory ({len(rows)} active record(s)):"]
+                for r in rows:
+                    lines.append(f"- [{r['project']}] ({r['kind']}/{r['state']}, rev {r['revision']}) {r['key']}: {r['value']}")
+                res = {"ok": True, "text": "\n".join(lines), "data": rows}
+
+        elif act == "memory_write":
+            ok, entry_or_err = zeroscript_kit.memory_put(
+                key=p.get("key"),
+                value=p.get("value"),
+                kind=p.get("kind") or "decision",
+                project=p.get("project") or "default",
+                state=p.get("state") or "observed",
+            )
+            if not ok:
+                res = {"ok": False, "error": str(entry_or_err)}
+            else:
+                e = entry_or_err
+                res = {
+                    "ok": True,
+                    "text": f"Saved project memory [{e['project']}] {e['kind']}/{e['key']} (rev {e['revision']}, state={e['state']}).",
+                    "data": e,
+                }
+    except Exception as e:
+        res = {"ok": False, "error": str(e)}
+
+    elapsed = time.monotonic() - t0
+    record_activity(act, p, res, elapsed, server_override="zeroscript")
+    return res
+
+
 async def run_tool_task(ws, name, args, timeout, rid):
     """Execute one tool off the socket read loop and send its result back.
 
@@ -1574,6 +1737,12 @@ async def handler(ws):
                     "skill": sk,
                     "error": None if sk else f"skill '{sid}' not found",
                 }))
+
+            elif mtype == "zs_kit":
+                action = msg.get("action") or ""
+                params = msg.get("params") or {}
+                res = await asyncio.to_thread(handle_zs_kit, action, params)
+                await ws.send(json.dumps({"type": "zs_kit_result", "id": rid, **res}))
 
             elif mtype == "get_logs":
                 with LOG_LOCK:

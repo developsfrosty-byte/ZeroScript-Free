@@ -276,6 +276,12 @@ function handleBridgeMessage(msg) {
       : { ok: false, error: msg.error });
     return;
   }
+  if (msg.type === "zs_kit_result") {
+    resolvePending(msg.id, msg.ok
+      ? { ok: true, text: msg.text, data: msg.data }
+      : { ok: false, error: msg.error });
+    return;
+  }
   if (msg.type === "tool_result") {
     resolvePending(msg.id, msg.ok
       ? { ok: true, text: msg.text, images: msg.images || [] }
@@ -381,6 +387,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       case "read_skill": {
         const r = await send({ type: "read_skill", skill_id: msg.skill_id }, 10000);
+        sendResponse(r);
+        break;
+      }
+      case "zs_kit": {
+        const r = await send({ type: "zs_kit", action: msg.action, params: msg.params || {} }, 15000);
         sendResponse(r);
         break;
       }

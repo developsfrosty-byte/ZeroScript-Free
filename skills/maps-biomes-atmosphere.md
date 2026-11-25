@@ -27,3 +27,4 @@ Use this playbook alongside `building-architecture` whenever recreating an iconi
 - **Anime Battlegrounds Daylight:** `ClockTime = 14.5`, crisp `Future` shadows, vibrant `ColorCorrection.Saturation = 0.14`, `Atmosphere.Density = 0.22`, subtle rim sun shafts.
 - **Doors / Horror Corridor:** `ClockTime = 0`, `Brightness = 0.4`, `Ambient = (18, 20, 28)`, `Atmosphere.Density = 0.55`, `Haze = 4`, warm flickering sconce `PointLight` pools (`Range = 18`).
 - **Cyberpunk / Sci-Fi Neon:** `ClockTime = 21.5`, deep navy `Fog/Atmosphere`, wet-look `Reflectance = 0.25` asphalt/metal floors, controlled cyan/magenta `Neon` trim (`Threshold = 1.25`).
+

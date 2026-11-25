@@ -22,10 +22,10 @@ const ZS = (() => {
   //   read | edit | screen | generate | roblox | tool
   function toolCategory(name) {
     const n = (name || "").includes("/") ? name.split("/").pop() : (name || "");
-    if (n === "list_commands" || n === "list_tools" || n === "list_skills" || n === "read_skill" || n === "get_skill") return "read";
+    if (/^(list_commands|list_tools|list_skills|read_skill|get_skill|audit_luau|route_skills|list_luau_modules|get_luau_module|get_style_guide|diagnose_bug|memory_read)$/.test(n)) return "read";
     if (/^(script_read|script_search|script_grep|search_game_tree|inspect_instance|get_studio_state|get_console_output|search_creator_store|list_roblox_studios)$/.test(n))
       return "read";
-    if (/^(multi_edit|insert_from_creator_store|store_image)$/.test(n) || n === "execute_luau")
+    if (/^(multi_edit|insert_from_creator_store|store_image|memory_write)$/.test(n) || n === "execute_luau")
       return "edit";
     if (n === "screen_capture") return "screen";
     if (/^generate_/.test(n)) return "generate";
@@ -272,7 +272,7 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       const parts = ["\n\n━━━ AGENT SKILLS (PRO PLAYBOOKS) ━━━"];
       if (autoSkills.length) {
         parts.push(
-          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves 1:1 game recreation/cloning, Motor6D/KeyframeSequence animations or procedural motion, character movement/parkour/camera feel, 1:1 map & biome design, UI/HUD, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
+          "You have specialized AAA Roblox Studio playbooks installed. Whenever a task involves 1:1 game recreation/cloning, Motor6D/KeyframeSequence animations or procedural motion, creature/facial/state-machine rigging, character movement/parkour/camera feel, 1:1 map & biome design, UI/HUD, reference UI & mobile/gamepad UX, 3D architecture, cutscenes, combat/VFX, Luau architecture/networking/DataStore/trading, pets/quests/lobbies, NPC AI/bosses, lighting/audio, economy/progression, performance optimization, or matches any skill below, call `{\"command\": \"read_skill\", \"params\": {\"skill_id\": \"<id>\"}}` FIRST before building or writing code, and apply its standards strictly. You can also call `{\"command\": \"list_skills\"}` anytime:\n" +
           autoSkills.map((s) => `- ${s.id} (${s.name}): ${s.tagline || s.category || "Pro playbook"}`).join("\n")
         );
       }
@@ -282,6 +282,15 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       skillsSection = parts.join("\n\n");
     }
 
+    const toolkitSection = `\n\n━━━ ZEROSCRIPT BUILT-IN TOOLKIT (ALWAYS AVAILABLE) ━━━
+In addition to Studio MCP commands, these local engineering tools are ALWAYS ready via standard JSON commands:
+- \`route_skills\` {"query": "what user asked", "limit": 4} — auto-picks top playbooks, genre styles & starter Luau modules for complex prompts.
+- \`audit_luau\` {"code": "...", "filename": "Name.server.luau", "context": "server|client|shared"} — 60-gate static Luau security, leak & bug scanner; run BEFORE finishing important server/client scripts!
+- \`list_luau_modules\` {} / \`get_luau_module\` {"module_id": "TokenBucket"} — fetch 19 battle-tested standalone Luau modules (TokenBucket, AttackWindow, RevisionGate, RevisionTrade, Finite, RequestEpoch, ScopedRay, CriticalSpring, ModalTransition, HealthBinding, ViewportFit, BoundedPool, Formation, StableSelection, CleanupScope, WeightedChoice, RigMap, MaterialBinding, StudioProbe).
+- \`get_style_guide\` {"genre": "anime"} — inspect 12 genre design tokens & anti-slop rules before building UI/worlds.
+- \`diagnose_bug\` {"query": "foot slide"} — lookup Symptom -> Probe -> Repair -> Retest recipes and Roblox API gotchas.
+- \`memory_read\` {"query": ""} / \`memory_write\` {"key": "...", "value": "...", "kind": "decision|project|style|asset|failure|progress", "project": "default"} — fast local architecture ledger persisted in ZeroScript alongside Studio memory.`;
+
     // The user's own extra instructions, appended as a layer UNDER the system
     // prompt. Optional - empty by default. It cannot change the rules above.
     const extra = customPrompt.trim()
@@ -289,7 +298,7 @@ IMPORTANT: Your very first action is to write \`list_commands\` with no params (
       : "";
 
     // The marker leads the prompt; it tags the bootstrap turn for camouflage.
-    return `${SYS_MARKER}\n${prompt}${siteRules}${skillsSection}${extra}`;
+    return `${SYS_MARKER}\n${prompt}${siteRules}${skillsSection}${toolkitSection}${extra}`;
   }
 
   // ── Curated, TESTED usage notes per command ─────────────────────────────────
